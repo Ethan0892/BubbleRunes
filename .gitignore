@@ -1,0 +1,35 @@
+# Gradle
+.gradle/
+build/
+bin/
+.settings/
+.classpath
+.project
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Eclipse
+.metadata/
+.recommenders/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Database (runtime data - don't commit)
+data.db
+data.db-journal

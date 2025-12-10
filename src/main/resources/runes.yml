@@ -1,0 +1,143 @@
+# BubbleRune - Rune Item Customization
+# Configure the appearance of each rune tier
+#
+# Formatting Support:
+# - Legacy: &a = green, &l = bold, &o = italic, etc.
+# - MiniMessage: <green>, <bold>, <gradient>, <rainbow>, etc.
+# - Hex RGB: &#rrggbb, &x&r&r&g&g&b&b, §x§r§r§g§g§b§b, <#rrggbb>
+# - All formats can be mixed in the same config!
+#
+# Color Format Examples:
+#   Legacy: &aGreen &cRed &l&6Bold Gold
+#   Hex (&#): &#FF5733 &#00FF00 (bright red, bright green)
+#   Hex (&x): &x&F&F&5&7&3&3 (bright red)
+#   Hex (§x): §x§F§F§5§7§3§3 (bright red)
+#   MiniMessage: <green>Green</green> <#FF5733>Bright Red</#FF5733>
+#
+# MiniMessage Examples:
+# - <green>Text</green> - Green text
+# - <bold>Text</bold> - Bold text
+# - <gradient:red:blue>Text</gradient> - Gradient from red to blue
+# - <rainbow>Text</rainbow> - Rainbow effect
+# - <hover:show_text:'Tooltip'>Text</hover> - Hover text
+
+# Global rune item settings
+global:
+  material: "PAPER"
+  glow: true  # Makes rune items glow with enchantment effect
+
+# Tier-specific customization
+# Available placeholders: %tier%, %player%, %enchant%
+tiers:
+  common:
+    name: "<!italic><gradient:#AAAAAA:#FFFFFF>Common Rune</gradient>"
+    customModelData: 19420
+    lore:
+      - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀ</gray>"
+      - "<!italic><white><bold>ᴄᴏᴍᴍᴏɴ</bold></white> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
+      - ""
+      - "<!italic><gradient:#AAAAAA:#FFFFFF>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
+  
+  uncommon:
+    name: "<!italic><gradient:#55FF55:#00AA00>Uncommon Rune</gradient>"
+    customModelData: 19450
+    lore:
+      - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀɴ</gray>"
+      - "<!italic><green><bold>ᴜɴᴄᴏᴍᴍᴏɴ</bold></green> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
+      - ""
+      - "<!italic><gradient:#55FF55:#00AA00>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
+  
+  rare:
+    name: "<!italic><gradient:#5555FF:#00AAFF>Rare Rune</gradient>"
+    customModelData: 19400
+    lore:
+      - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀ</gray>"
+      - "<!italic><blue><bold>ʀᴀʀᴇ</bold></blue> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
+      - ""
+      - "<!italic><gradient:#5555FF:#00AAFF>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
+  
+  epic:
+    name: "<!italic><gradient:#FF5555:#AA0000>Epic Rune</gradient>"
+    customModelData: 19480
+    lore:
+      - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀɴ</gray>"
+      - "<!italic><red><bold>ᴇᴘɪᴄ</bold></red> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
+      - ""
+      - "<!italic><gradient:#FF5555:#AA0000>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
+  
+  legendary:
+    name: "<!italic><gradient:#FFAA00:#FFFF55>Legendary Rune</gradient>"
+    customModelData: 19440
+    lore:
+      - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀ</gray>"
+      - "<!italic><gold><bold>ʟᴇɢᴇɴᴅᴀʀʏ</bold></gold> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
+      - ""
+      - "<!italic><gradient:#FFAA00:#FFFF55>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
+  
+  special:
+    name: "<!italic><gradient:#55FFFF:#00AAAA>Special Rune</gradient>"
+    customModelData: 19470
+    lore:
+      - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀ</gray>"
+      - "<!italic><aqua><bold>ꜱᴘᴇᴄɪᴀʟ</bold></aqua> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
+      - ""
+      - "<!italic><gradient:#55FFFF:#00AAAA>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
+  
+  veryspecial:
+    name: "<!italic><gradient:#9557FB:#A81DEF>Very Special Rune</gradient>"
+    customModelData: 19430
+    lore:
+      - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀ</gray>"
+      - "<!italic><light_purple><bold>ᴠᴇʀʏ ꜱᴘᴇᴄɪᴀʟ</bold></light_purple> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
+      - ""
+      - "<!italic><gradient:#9557FB:#A81DEF>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
+
+# Preview rune settings (when runePreview.enabled is true in config.yml)
+preview:
+  name: "&e&l? %tier% Rune ?"
+  customModelData: 0  # 0 = use tier-specific, or set custom value
+  glow: true
+  lore:
+    - "<gray>Tier: <white>%tier%</white></gray>"
+    - "<gray></gray>"
+    - "<gray>Right-click to reveal</gray>"
+    - "<gray>the hidden enchantment!</gray>"
+
+# Enchanted book customization (after revealing rune)
+# Note: This section is for future implementation
+# Currently runes are revealed by right-click and handled by RuneItemListener
+book:
+  name: "&d%enchant% Book"
+  customModelData: 0  # Set to custom value or 0 to disable
+  lore:
+    - "&7A magical EcoEnchant tome."
+    - "&7Level: &f%level%"
+
+# Formatting Guide:
+# 
+# Legacy Color Codes (&):
+#   &0-9, &a-f = colors | &l = bold | &o = italic | &n = underline | &m = strikethrough | &k = magic
+# 
+# Hex RGB Formats:
+#   &#rrggbb = Simple hex (e.g., &#FF5733)
+#   &x&r&r&g&g&b&b = Spaced hex ampersand (e.g., &x&F&F&5&7&3&3)
+#   §x§r§r§g§g§b§b = Spaced hex section symbol (e.g., §x§F§F§5§7§3§3)
+#   <#rrggbb> = MiniMessage hex (e.g., <#FF5733>)
+# 
+# MiniMessage Tags (<>):
+#   Colors: <red>, <green>, <blue>, <gold>, <yellow>, <aqua>, <light_purple>, etc.
+#   Formats: <bold>, <italic>, <underlined>, <strikethrough>, <obfuscated>
+#   Advanced: <gradient:color1:color2>, <rainbow>, <hover:show_text:'text'>, <click:run_command:'/cmd'>
+# 
+# Placeholders:
+#   %tier% = Tier name | %enchant% = Enchantment ID | %level% = Enchantment level | %player% = Player name
+# 
+# Custom Model Data:
+#   Set to 0 to disable, or any positive integer for resource pack support

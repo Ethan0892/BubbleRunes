@@ -1,0 +1,430 @@
+# BubbleRune configuration for BubbleCraft
+#
+# Text Formatting Support:
+# - Legacy: Use & for color codes (&a = green, &l = bold, etc.)
+# - MiniMessage: Use <> tags (<green>, <bold>, <gradient>, etc.)
+# - Hex RGB: &#rrggbb, &x&r&r&g&g&b&b, §x§r§r§g§g§b§b, <#rrggbb>
+# - JSON: Full Adventure component JSON
+# - All formats work anywhere you see text!
+#
+# Color Format Examples:
+#   Legacy: &aGreen &cRed &l&6Bold Gold
+#   Hex (&#): &#FF5733 &#00FF00 (bright red, bright green)
+#   Hex (&x): &x&F&F&5&7&3&3 (bright red)
+#   Hex (§x): §x§F§F§5§7§3§3 (bright red)
+#   MiniMessage: <green>Green</green> <#FF5733>Bright Red</#FF5733>
+#
+# MiniMessage Examples:
+#   <green>Green text</green>
+#   <gradient:red:blue>Gradient text</gradient>
+#   <rainbow>Rainbow text</rainbow>
+#   <bold><gold>Bold and gold!</gold></bold>
+
+enabled: true
+
+# Performance & Safety Settings
+performance:
+  # Prevent players from spamming rune tables (milliseconds)
+  interactCooldown: 500
+  # Automatically cleanup expired cooldowns (ticks, 6000 = 5 minutes)
+  cleanupInterval: 6000
+  # Maximum particles per effect to prevent lag
+  maxParticles: 100
+  # Async particle spawning (reduces main thread load)
+  asyncParticles: true
+
+# Multiple rune enchantment table locations
+# Add more tables by creating new entries under runeTables
+runeTables:
+  spawn:
+    world: world
+    x: 0
+    y: 64
+    z: 0
+  # Example of additional table:
+  # nether:
+  #   world: world_nether
+  #   x: 100
+  #   y: 65
+  #   z: -200
+
+# Backwards compatibility - single table (will be used if runeTables is empty)
+runeTable:
+  world: world
+  x: 0
+  y: 64
+  z: 0
+
+# Cooldown system to prevent spamming
+cooldown:
+  enabled: true
+  seconds: 60  # Time in seconds before a player can use rune table again
+
+# Sound effects
+sounds:
+  enabled: true
+  # Uses vanilla Minecraft sounds: ENTITY_PLAYER_LEVELUP, BLOCK_ENCHANTMENT_TABLE_USE, ENTITY_VILLAGER_NO
+
+# Particle effects at rune table
+particles:
+  enabled: true
+  count: 50
+  speed: 0.1
+  spiralEffect: true  # Spiral animation for rare+ tiers
+
+# Rune combining in anvil
+runeCombining:
+  enabled: true
+  requiredRunes: 3  # Number of same-tier runes needed to upgrade to next tier
+
+# Legacy XP cost setting - DEPRECATED
+# XP costs are now configured per tier in the tiers section below
+# This section is kept for backwards compatibility but is no longer used
+xpCost:
+  min: 1000
+  max: 10000
+
+# Rune tiers and their XP thresholds for GUARANTEED tier rewards.
+# Players get the HIGHEST tier they can afford based on their current XP.
+# Example: 50,000 XP guarantees Legendary, 250,000+ guarantees Very Special
+# Use the internal EcoEnchant IDs (check plugins/EcoEnchants/enchants/ folder for exact names)
+#
+# NOTE: Rune appearance (names, lore, customModelData) is configured in runes.yml
+# This file only controls mechanics (XP thresholds, enchant pools)
+# XP costs have min/max for variation, but tier is determined by the minimum threshold
+tiers:
+  common:
+    weight: 60.0
+    minLevel: 1
+    maxLevel: 2
+    xpCost:
+      min: 1000
+      max: 2000
+    enchants:
+      - "block_breather"
+      - "foraging"
+      - "introversion"
+      - "slaughter"
+      - "ender_slayer"
+      - "finishing"
+
+  uncommon:
+    weight: 40.0
+    minLevel: 1
+    maxLevel: 3
+    xpCost:
+      min: 3000
+      max: 5000
+    enchants:
+      - "first_strike"
+      - "jumpshot"
+      - "cubism"
+      - "sparks"
+      - "stamina"
+      - "stun"
+
+  rare:
+    weight: 25.0
+    minLevel: 2
+    maxLevel: 4
+    xpCost:
+      min: 7000
+      max: 10000
+    enchants:
+      - "boss_hunter"
+      - "caffeinated"
+      - "flashbang"
+      - "getaway"
+      - "goliath"
+      - "lifesteal"
+      - "lumberjack"
+      - "ninja"
+      - "shura"
+      - "skull_puncture"
+      - "vanish"
+      - "veinminer"
+      - "rocket_saver"
+
+  epic:
+    weight: 10.0
+    minLevel: 2
+    maxLevel: 5
+    xpCost:
+      min: 15000
+      max: 25000
+    enchants:
+      - "adrenaline"
+      - "arcane_defence"
+      - "criticals"
+      - "dexterity"
+      - "end_affinity"
+      - "escape"
+      - "haunting"
+      - "nether_affinity"
+      - "poison_ivy"
+      - "rapid"
+      - "rebounding"
+      - "rumble"
+      - "shulker_harvest"
+      - "slipstream"
+      - "snipe"
+      - "thor"
+      - "wyvron"
+
+  legendary:
+    weight: 4.0
+    minLevel: 3
+    maxLevel: 5
+    xpCost:
+      min: 50000
+      max: 75000
+    enchants:
+      - "abrasion"
+      - "ascend"
+      - "blackout"
+      - "bleed"
+      - "brightness"
+      - "charge"
+      - "contagion"
+      - "frost"
+      - "fortitude"
+      - "infernal_touch"
+      - "excavation"
+      - "feather_step"
+      - "metabolism"
+      - "nether_prospector"
+      - "thrive"
+      - "wound"
+
+  special:
+    weight: 0.8
+    minLevel: 4
+    maxLevel: 5
+    xpCost:
+      min: 100000
+      max: 150000
+    enchants:
+      - "aura"
+      - "confusion"
+      - "streamlining"
+      - "breaklessness_curse"
+      - "harmlessness_curse"
+      - "hunger_curse"
+      - "misfortune_curse"
+      - "permanence_curse"
+
+  veryspecial:
+    weight: 0.2
+    minLevel: 5
+    maxLevel: 5
+    xpCost:
+      min: 250000
+      max: 500000
+    enchants:
+      - "blast_mining"
+      - "repairing"
+      - "soulbound"
+
+# GUI for rune tables
+gui:
+  enabled: true
+  title: "&5&lRune Table - Choose Your Tier"
+  size: 27  # Must be 9, 18, 27, 36, 45, or 54
+  
+  # Tier Selection GUI Layout
+  # Players click on tier buttons to choose which rune they want
+  tierButtons:
+    enabled: true
+    # Slots for each tier button (0-26 for size 27)
+    slots:
+      common: 10
+      uncommon: 11
+      rare: 12
+      epic: 13
+      legendary: 14
+      special: 15
+      veryspecial: 16
+    
+    # Materials when player CAN afford the tier
+    affordableMaterials:
+      common: "WHITE_WOOL"
+      uncommon: "LIME_WOOL"
+      rare: "BLUE_WOOL"
+      epic: "RED_WOOL"
+      legendary: "ORANGE_WOOL"
+      special: "CYAN_WOOL"
+      veryspecial: "MAGENTA_WOOL"
+    
+    # Material when player CANNOT afford
+    unaffordableMaterial: "GRAY_STAINED_GLASS_PANE"
+    # Material when on cooldown
+    cooldownMaterial: "RED_STAINED_GLASS_PANE"
+    
+    # Add glow effect to affordable tiers
+    glowWhenAffordable: true
+  
+  # Info button position and settings
+  infoButton:
+    enabled: true
+    slot: 22
+    material: "BOOK"
+    name: "&6&lHow to Use"
+    lore:
+      - "&7Click on a tier above to"
+      - "&7roll a rune of that tier!"
+      - ""
+      - "&7Your XP: &e%player_xp%"
+      - "&7Your BubbleCoins: &e%player_coins%"
+# Economy Settings
+economy:
+  # Require BubbleCoin from CoinsEngine plugin
+  bubbleCoinEnabled: true
+  bubbleCoinCurrency: "bubblecoin"  # Currency ID in CoinsEngine
+  
+  # If CoinsEngine is not found, disable coin requirement automatically
+  requireCoinsEnginePlugin: true
+  
+  # BubbleCoin costs per tier
+  # Set to 0 to make a tier free (still costs XP)
+  bubbleCoinCosts:
+    common: 1
+    uncommon: 2
+    rare: 5
+    epic: 10
+    legendary: 25
+    special: 50
+    veryspecial: 100
+
+# Firework effects for legendary+ tier rolls
+fireworks:
+  enabled: true
+
+# Broadcast messages for legendary+ tier rolls
+broadcasts:
+  enabled: true
+
+messages:
+  # You can use MiniMessage here! Examples:
+  # runeReceived: "<green>You received a <white>%tier%</white> rune!</green>"
+  # broadcast: "<gradient:gold:yellow><bold>✦</bold></gradient> <yellow>%player%</yellow> rolled a <rainbow>%tier%</rainbow> rune!"
+  runeReceived: "&aYou received a &f%tier% &arune! (-%cost_xp% XP, -%cost_coins% BubbleCoins)"
+  notEnoughXp: "&cYou need at least %cost_xp% XP and %cost_coins% BubbleCoins to roll a %tier% rune!"
+  notEnoughCoins: "&cYou need %cost_coins% BubbleCoins to roll a rune!"
+  inventoryFull: "&cYour inventory is full! Clear a slot first."
+  runeRevealed: "&aYour rune revealed a &f%enchant% &abook!"
+  cooldown: "&cYou must wait %seconds% seconds before using the rune table again!"
+  runeCombined: "&aYou combined %count% &f%tier% &arunes into a &f%newtier% &arune!"
+  broadcast: "&6&l✦ &e%player% &6rolled a &f%tier% &6rune! &6&l✦"
+  coinsEngineNotFound: "&cCoinsEngine plugin not found! BubbleCoin costs disabled."
+
+runeItem:
+  material: "PAPER"
+  name: "&b%tier% Rune"
+  glow: true # Makes rune items glow with enchantment effect
+  lore:
+    - "&7Right-click to reveal a"
+    - "&7random &f%tier% &7EcoEnchant book."
+    - ""
+    - "&7Combine 3 in an anvil to upgrade!"
+
+bookItem:
+  name: "&d%enchant% Book"
+  lore:
+    - "&7A magical EcoEnchant tome."
+
+# Rune preview system - shows tier before revealing enchantment
+runePreview:
+  enabled: false
+  name: "&e&l? %tier% Rune ?"
+  glow: true
+
+# Milestone Rewards - Rewards for reaching roll milestones
+milestones:
+  enabled: true
+  rewards:
+    10:
+      tier: "UNCOMMON"
+      message: "&a&lMilestone! &eYou've rolled &f10 &erunes! Bonus: &aUncommon Rune"
+    25:
+      tier: "RARE"
+      message: "&a&lMilestone! &eYou've rolled &f25 &erunes! Bonus: &9Rare Rune"
+    50:
+      tier: "RARE"
+      message: "&a&lMilestone! &eYou've rolled &f50 &erunes! Bonus: &9Rare Rune"
+    100:
+      tier: "EPIC"
+      message: "&a&lMilestone! &eYou've rolled &f100 &erunes! Bonus: &5Epic Rune"
+    250:
+      tier: "EPIC"
+      message: "&a&lMilestone! &eYou've rolled &f250 &erunes! Bonus: &5Epic Rune"
+    500:
+      tier: "LEGENDARY"
+      message: "&a&lMilestone! &eYou've rolled &f500 &erunes! Bonus: &6Legendary Rune"
+    1000:
+      tier: "LEGENDARY"
+      message: "&a&lMilestone! &eYou've rolled &f1000 &erunes! Bonus: &6Legendary Rune"
+    2500:
+      tier: "SPECIAL"
+      message: "&a&lMilestone! &eYou've rolled &f2500 &erunes! Bonus: &bSpecial Rune"
+    5000:
+      tier: "SPECIAL"
+      message: "&a&lMilestone! &eYou've rolled &f5000 &erunes! Bonus: &bSpecial Rune"
+    10000:
+      tier: "VERYSPECIAL"
+      message: "&a&lMilestone! &eYou've rolled &f10000 &erunes! Bonus: &d&lVery Special Rune"
+
+# Weekly Quests - Hard survival challenges with rune rewards
+weeklyQuests:
+  enabled: true
+  messages:
+    reset: "&6&lWeekly Quests Reset! &eNew challenges await!"
+    complete: "&a&lQuest Complete! &f%quest%"
+  quests:
+    master_miner:
+      name: "Master Miner"
+      description: "Mine 10,000 blocks"
+      type: "mine_blocks"
+      required: 10000
+      reward:
+        type: "rune"
+        tier: "LEGENDARY"
+    mob_slayer:
+      name: "Mob Slayer"
+      description: "Kill 1,000 mobs"
+      type: "kill_mobs"
+      required: 1000
+      reward:
+        type: "rune"
+        tier: "EPIC"
+    diamond_hunter:
+      name: "Diamond Hunter"
+      description: "Mine 500 diamond ore"
+      type: "mine_diamond_ore"
+      required: 500
+      reward:
+        type: "rune"
+        tier: "LEGENDARY"
+    wither_slayer:
+      name: "Wither Slayer"
+      description: "Kill 10 withers"
+      type: "kill_wither"
+      required: 10
+      reward:
+        type: "rune"
+        tier: "VERYSPECIAL"
+    ender_dragon_hunter:
+      name: "Dragon Hunter"
+      description: "Kill 5 ender dragons"
+      type: "kill_ender_dragon"
+      required: 5
+      reward:
+        type: "rune"
+        tier: "VERYSPECIAL"
+    legendary_collector:
+      name: "Legendary Collector"
+      description: "Roll 100 runes"
+      type: "roll_runes"
+      required: 100
+      reward:
+        type: "rune"
+        tier: "SPECIAL"

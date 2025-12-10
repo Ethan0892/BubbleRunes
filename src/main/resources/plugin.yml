@@ -1,0 +1,25 @@
+name: BubbleRune
+main: com.bubblecraft.bubblerune.BubbleRunePlugin
+version: 1.0.0
+api-version: "1.21"
+author: BubbleCraft
+website: ""
+
+softdepend:
+  - eco
+  - EcoEnchants
+  - PlaceholderAPI
+
+commands:
+  bubblerune:
+    description: BubbleRune admin command
+    usage: "/bubblerune <reload|settable|gui|giverune|testroll|quests>"
+    permission: bubblerune.admin
+
+permissions:
+  bubblerune.admin:
+    description: "Allows managing BubbleRune."
+    default: op
+  bubblerune.gui:
+    description: "Allows opening the rune GUI from anywhere."
+    default: op
