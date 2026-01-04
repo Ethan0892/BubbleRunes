@@ -176,11 +176,15 @@ public class RuneService {
                 }
             }
             if (newTierWeights.isEmpty()) {
-                total = 0;
-                total += 60; newTierWeights.put(total, RuneTier.COMMON);
-                total += 25; newTierWeights.put(total, RuneTier.UNCOMMON);
-                total += 10; newTierWeights.put(total, RuneTier.RARE);
-                total += 5; newTierWeights.put(total, RuneTier.LEGENDARY);
+                total = 0.0;
+                total += 60;
+                newTierWeights.put(total, RuneTier.COMMON);
+                total += 25;
+                newTierWeights.put(total, RuneTier.UNCOMMON);
+                total += 10;
+                newTierWeights.put(total, RuneTier.RARE);
+                total += 5;
+                newTierWeights.put(total, RuneTier.LEGENDARY);
             }
 
             // Legacy global XP cost (deprecated - kept for backwards compatibility)
@@ -316,151 +320,231 @@ public class RuneService {
      * @param chosenTier The tier the player chose to roll for
      */
     public void grantRune(Player player, Location tableLocation, RuneTier chosenTier) {
-        if (player == null || !player.isOnline()) {
-            plugin.getLogger().warning("Attempted to grant rune to null or offline player");
+        if (!validateGrantRuneInputs(player, chosenTier)) {
             return;
         }
-        
+
+        int currentXp = ExperienceUtil.getTotalExperience(player);
+        int minCost = getTierMinXpCost(chosenTier);
+
+        if (currentXp < minCost) {
+            handleNotEnoughXp(player, chosenTier, minCost);
+            return;
+        }
+
+        int cost = rollAffordableXpCost(currentXp, chosenTier, minCost);
+        int coinCost = getBubbleCoinCost(chosenTier);
+
+        if (!validateCoinAffordability(player, coinCost)) {
+            return;
+        }
+
+        if (!ensureInventorySpace(player)) {
+            return;
+        }
+
+        boolean coinsDeducted = deductXpAndCoins(player, currentXp, cost, coinCost);
+        if (coinCost > 0 && isBubbleCoinEnabled() && !coinsDeducted) {
+            return;
+        }
+
+        plugin.getStatsManager().recordXpSpent(player.getUniqueId(), cost);
+
+        RuneCreation creation = createRuneWithRefunds(player, chosenTier, currentXp, coinsDeducted, coinCost);
+        if (creation == null) {
+            return;
+        }
+
+        // Give rune to player
+        player.getInventory().addItem(creation.rune);
+
+        // Spawn enhanced tier-specific particles
+        if (plugin.getConfig().getBoolean("particles.enabled", true) && tableLocation != null) {
+            spawnEnhancedParticles(tableLocation, chosenTier);
+        }
+
+        sendRuneReceivedMessage(player, chosenTier, cost, coinCost, creation.enchantId);
+        playSuccessSounds(player, chosenTier);
+        triggerFireworksAndBroadcasts(player, chosenTier);
+
+        plugin.getStatsManager().recordRoll(player.getUniqueId(), chosenTier);
+        recordRollToDatabaseAsync(player, chosenTier, creation.enchantId, creation.rune, cost, coinCost, tableLocation);
+
+        if (plugin.getConfig().getBoolean("milestones.enabled", true)) {
+            checkMilestones(player);
+        }
+
+        if (plugin.getQuestListener() != null) {
+            plugin.getQuestListener().onRuneRoll(player, chosenTier);
+        }
+
+        if (plugin.getConfig().getBoolean("cooldown.enabled", true)) {
+            plugin.getCooldownManager().setCooldown(player.getUniqueId());
+        }
+    }
+
+    private boolean validateGrantRuneInputs(Player player, RuneTier chosenTier) {
+        if (player == null || !player.isOnline()) {
+            plugin.getLogger().warning("Attempted to grant rune to null or offline player");
+            return false;
+        }
+
         if (chosenTier == null) {
             player.sendMessage(TextFormatter.format(plugin.getMessage(
                 "messages.invalidTierSelection",
                 "&cInvalid tier selection!")));
-            return;
+            return false;
         }
-        
-        int currentXp = ExperienceUtil.getTotalExperience(player);
 
-        // Verify player can afford the chosen tier (XP)
-        int minCost = getTierMinXpCost(chosenTier);
+        return true;
+    }
 
-        if (currentXp < minCost) {
-            int coinCost = getBubbleCoinCost(chosenTier);
-            String template = plugin.getMessage("messages.notEnoughXp", "&cYou need at least %cost_xp% XP and %cost_coins% BubbleCoins to roll a %tier% rune!");
-            String msg = TextFormatter.format(template
-                .replace("%cost%", String.valueOf(minCost)) // Legacy placeholder support
-                .replace("%cost_xp%", String.valueOf(minCost))
-                .replace("%cost_coins%", String.valueOf(coinCost))
-                .replace("%tier%", chosenTier.name().toLowerCase()));
-            player.sendMessage(msg);
+    private void handleNotEnoughXp(Player player, RuneTier chosenTier, int minCost) {
+        int coinCost = getBubbleCoinCost(chosenTier);
+        String template = plugin.getMessage(
+            "messages.notEnoughXp",
+            "&cYou need at least %cost_xp% XP and %cost_coins% BubbleCoins to roll a %tier% rune!"
+        );
+        String msg = TextFormatter.format(template
+            .replace("%cost%", String.valueOf(minCost)) // Legacy placeholder support
+            .replace("%cost_xp%", String.valueOf(minCost))
+            .replace("%cost_coins%", String.valueOf(coinCost))
+            .replace("%tier%", chosenTier.name().toLowerCase()));
+        player.sendMessage(msg);
 
-            // Play fail sound with pitch variation
+        if (plugin.getConfig().getBoolean("sounds.enabled", true)) {
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
+        }
+    }
+
+    private int rollAffordableXpCost(int currentXp, RuneTier chosenTier, int minCost) {
+        int maxCost = getTierMaxXpCost(chosenTier);
+        if (maxCost < minCost) {
+            maxCost = minCost;
+        }
+
+        int effectiveMaxCost = Math.min(maxCost, currentXp);
+        if (effectiveMaxCost <= minCost) {
+            return minCost;
+        }
+
+        return minCost + random.nextInt(effectiveMaxCost - minCost + 1);
+    }
+
+    private boolean validateCoinAffordability(Player player, int coinCost) {
+        if (isBubbleCoinEnabled() && coinCost > 0 && !hasEnoughCoins(player, coinCost)) {
+            String template = plugin.getMessage(
+                "messages.notEnoughCoins",
+                "&cYou need %cost_coins% BubbleCoins to roll a rune!"
+            );
+            player.sendMessage(TextFormatter.format(template.replace("%cost_coins%", String.valueOf(coinCost))));
             if (plugin.getConfig().getBoolean("sounds.enabled", true)) {
                 player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
             }
-            return;
+            return false;
         }
+        return true;
+    }
 
-        // Roll an XP cost that the player can actually pay.
-        int maxCost = getTierMaxXpCost(chosenTier);
-        if (maxCost < minCost) maxCost = minCost;
+    private boolean ensureInventorySpace(Player player) {
+        if (player.getInventory().firstEmpty() != -1) {
+            return true;
+        }
+        String msg = TextFormatter.format(plugin.getMessage(
+            "messages.inventoryFull",
+            "&cYour inventory is full! Clear a slot first."
+        ));
+        player.sendMessage(msg);
+        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
+        return false;
+    }
 
-        int effectiveMaxCost = Math.min(maxCost, currentXp);
-        int cost;
-        if (effectiveMaxCost <= minCost) {
-            cost = minCost;
-        } else {
-            cost = minCost + random.nextInt(effectiveMaxCost - minCost + 1);
-        }
-        
-        // Get BubbleCoin cost for this tier
-        int coinCost = getBubbleCoinCost(chosenTier);
-        
-        // Check BubbleCoin balance if enabled
-        if (isBubbleCoinEnabled() && coinCost > 0) {
-            if (!hasEnoughCoins(player, coinCost)) {
-                String template = plugin.getMessage("messages.notEnoughCoins", "&cYou need %cost_coins% BubbleCoins to roll a rune!");
-                String msg = TextFormatter.format(template.replace("%cost_coins%", String.valueOf(coinCost)));
-                player.sendMessage(msg);
-                
-                if (plugin.getConfig().getBoolean("sounds.enabled", true)) {
-                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
-                }
-                return;
-            }
-        }
-        
-        // Check if inventory has space
-        if (player.getInventory().firstEmpty() == -1) {
-            String msg = TextFormatter.format(plugin.getMessage("messages.inventoryFull", "&cYour inventory is full! Clear a slot first."));
-            player.sendMessage(msg);
-            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
-            return;
-        }
-
-        // Deduct XP
-        int newTotalXp = currentXp - cost;
+    /**
+     * Deducts XP immediately. If coin deduction is required and fails, XP is refunded and a message is sent.
+     *
+     * @return true if coins were deducted (or not required), false if coin deduction failed.
+     */
+    private boolean deductXpAndCoins(Player player, int originalXp, int xpCost, int coinCost) {
+        int newTotalXp = originalXp - xpCost;
         if (newTotalXp < 0) {
-            // Should not happen due to affordability logic, but keep it bulletproof.
             newTotalXp = 0;
         }
         ExperienceUtil.setTotalExperience(player, newTotalXp);
-        
-        // Deduct BubbleCoins if enabled
-        boolean coinsDeducted = false;
-        if (isBubbleCoinEnabled() && coinCost > 0) {
-            if (!deductCoins(player, coinCost)) {
-                // Refund XP if coin deduction fails
-                ExperienceUtil.setTotalExperience(player, currentXp);
-                player.sendMessage(TextFormatter.format(plugin.getMessage(
-                    "messages.failedDeductCoinsRefunded",
-                    "&cFailed to deduct BubbleCoins! XP refunded.")));
-                return;
-            }
-            coinsDeducted = true;
+
+        if (!isBubbleCoinEnabled() || coinCost <= 0) {
+            return true;
         }
-        
-        // Track XP spent
-        plugin.getStatsManager().recordXpSpent(player.getUniqueId(), cost);
-        
-        // Create rune (preview or direct based on config)
+
+        if (deductCoins(player, coinCost)) {
+            return true;
+        }
+
+        ExperienceUtil.setTotalExperience(player, originalXp);
+        player.sendMessage(TextFormatter.format(plugin.getMessage(
+            "messages.failedDeductCoinsRefunded",
+            "&cFailed to deduct BubbleCoins! XP refunded."
+        )));
+        return false;
+    }
+
+    private static final class RuneCreation {
+        private final ItemStack rune;
+        private final String enchantId;
+
+        private RuneCreation(ItemStack rune, String enchantId) {
+            this.rune = rune;
+            this.enchantId = enchantId;
+        }
+    }
+
+    private RuneCreation createRuneWithRefunds(Player player, RuneTier chosenTier, int refundXp, boolean coinsDeducted, int coinCost) {
         ItemStack rune;
         String enchantId = null;
+
         try {
             if (plugin.getConfig().getBoolean("runePreview.enabled", true)) {
                 enchantId = getRandomEnchantIdForTier(chosenTier);
                 if (enchantId == null) {
                     plugin.getLogger().warning("No enchantments available for tier: " + chosenTier);
-                    ExperienceUtil.setTotalExperience(player, currentXp); // Refund XP
-                    if (coinsDeducted) refundCoins(player, coinCost); // Refund coins
-                    player.sendMessage(TextFormatter.format(plugin.getMessage(
-                        "messages.errorCreatingRuneRefunded",
-                        "&cError creating rune! XP and coins refunded.")));
-                    return;
+                    refundAfterFailedCreation(player, refundXp, coinsDeducted, coinCost);
+                    return null;
                 }
                 rune = previewService.createPreviewRune(chosenTier, enchantId);
             } else {
                 rune = createRuneItem(chosenTier);
             }
-            
+
             if (rune == null) {
                 plugin.getLogger().severe("Failed to create rune item for tier: " + chosenTier);
-                ExperienceUtil.setTotalExperience(player, currentXp); // Refund XP
-                if (coinsDeducted) refundCoins(player, coinCost); // Refund coins
-                player.sendMessage(TextFormatter.format(plugin.getMessage(
-                    "messages.errorCreatingRuneRefunded",
-                    "&cError creating rune! XP and coins refunded.")));
-                return;
+                refundAfterFailedCreation(player, refundXp, coinsDeducted, coinCost);
+                return null;
             }
         } catch (Exception e) {
             plugin.getLogger().severe("Exception creating rune: " + e.getMessage());
             e.printStackTrace();
-            ExperienceUtil.setTotalExperience(player, currentXp); // Refund XP on error
-            if (coinsDeducted) refundCoins(player, coinCost); // Refund coins
-            player.sendMessage(TextFormatter.format(plugin.getMessage(
-                "messages.errorCreatingRuneRefunded",
-                "&cError creating rune! XP and coins refunded.")));
-            return;
+            refundAfterFailedCreation(player, refundXp, coinsDeducted, coinCost);
+            return null;
         }
-        
-        // Give rune to player
-        player.getInventory().addItem(rune);
-        
-        // Spawn enhanced tier-specific particles
-        if (plugin.getConfig().getBoolean("particles.enabled", true) && tableLocation != null) {
-            spawnEnhancedParticles(tableLocation, chosenTier);
+
+        return new RuneCreation(rune, enchantId);
+    }
+
+    private void refundAfterFailedCreation(Player player, int originalXp, boolean coinsDeducted, int coinCost) {
+        ExperienceUtil.setTotalExperience(player, originalXp);
+        if (coinsDeducted) {
+            refundCoins(player, coinCost);
         }
-        
-        String template = plugin.getMessage("messages.runeReceived", "&aYou received a &f%tier% &arune! (-%cost_xp% XP, -%cost_coins% BubbleCoins)");
+        player.sendMessage(TextFormatter.format(plugin.getMessage(
+            "messages.errorCreatingRuneRefunded",
+            "&cError creating rune! XP and coins refunded."
+        )));
+    }
+
+    private void sendRuneReceivedMessage(Player player, RuneTier chosenTier, int cost, int coinCost, String enchantId) {
+        String template = plugin.getMessage(
+            "messages.runeReceived",
+            "&aYou received a &f%tier% &arune! (-%cost_xp% XP, -%cost_coins% BubbleCoins)"
+        );
         String message = TextFormatter.format(template
             .replace("%tier%", chosenTier.name().toLowerCase())
             .replace("%cost%", String.valueOf(cost)) // Legacy placeholder support
@@ -468,88 +552,74 @@ public class RuneService {
             .replace("%cost_coins%", String.valueOf(coinCost))
             .replace("%enchant%", enchantId != null ? enchantId : "unknown"));
         player.sendMessage(message);
-        
-        // Play tier-specific success sound with pitch variation
-        if (plugin.getConfig().getBoolean("sounds.enabled", true)) {
-            float pitch = getTierPitch(chosenTier);
-            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, pitch);
-            
-            // Extra sound for legendary+ tiers
-            if (chosenTier.ordinal() >= RuneTier.LEGENDARY.ordinal()) {
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    if (player.isOnline()) {
-                        player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.7f, pitch);
-                    }
-                }, 5L);
-            }
+    }
+
+    private void playSuccessSounds(Player player, RuneTier chosenTier) {
+        if (!plugin.getConfig().getBoolean("sounds.enabled", true)) {
+            return;
         }
-        
-        // Firework effects for legendary+ tiers
-        if (plugin.getConfig().getBoolean("fireworks.enabled", true)) {
-            if (chosenTier == RuneTier.LEGENDARY || chosenTier == RuneTier.SPECIAL || chosenTier == RuneTier.VERYSPECIAL) {
-                spawnFirework(player, chosenTier);
-            }
-        }
-        
-        // Broadcast for legendary+ tiers
-        if (plugin.getConfig().getBoolean("broadcasts.enabled", true)) {
-            if (chosenTier == RuneTier.LEGENDARY || chosenTier == RuneTier.SPECIAL || chosenTier == RuneTier.VERYSPECIAL) {
-                broadcastRoll(player, chosenTier);
-            }
-        }
-        
-        // Record stats
-        plugin.getStatsManager().recordRoll(player.getUniqueId(), chosenTier);
-        
-        // Record roll to database asynchronously
-        if (plugin.getDatabaseManager() != null) {
-            String enchantName = enchantId != null ? enchantId : "Unknown";
-            int enchantLevel = 1; // Default level for preview runes
-            
-            // Try to extract actual enchant info from the rune item
-            if (rune.hasItemMeta() && rune.getItemMeta().hasEnchants()) {
-                Map<Enchantment, Integer> enchants = rune.getItemMeta().getEnchants();
-                if (!enchants.isEmpty()) {
-                    Map.Entry<Enchantment, Integer> firstEnchant = enchants.entrySet().iterator().next();
-                    enchantName = firstEnchant.getKey().getKey().getKey();
-                    enchantLevel = firstEnchant.getValue();
+
+        float pitch = getTierPitch(chosenTier);
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, pitch);
+
+        if (chosenTier.ordinal() >= RuneTier.LEGENDARY.ordinal()) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (player.isOnline()) {
+                    player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.7f, pitch);
                 }
+            }, 5L);
+        }
+    }
+
+    private void triggerFireworksAndBroadcasts(Player player, RuneTier chosenTier) {
+        boolean isHighTier = chosenTier == RuneTier.LEGENDARY || chosenTier == RuneTier.SPECIAL || chosenTier == RuneTier.VERYSPECIAL;
+
+        if (isHighTier && plugin.getConfig().getBoolean("fireworks.enabled", true)) {
+            spawnFirework(player, chosenTier);
+        }
+
+        if (isHighTier && plugin.getConfig().getBoolean("broadcasts.enabled", true)) {
+            broadcastRoll(player, chosenTier);
+        }
+    }
+
+    private void recordRollToDatabaseAsync(Player player, RuneTier chosenTier, String enchantId, ItemStack rune, int cost, int coinCost, Location tableLocation) {
+        if (plugin.getDatabaseManager() == null) {
+            return;
+        }
+
+        String enchantName = enchantId != null ? enchantId : "Unknown";
+        int enchantLevel = 1;
+
+        if (rune.hasItemMeta() && rune.getItemMeta().hasEnchants()) {
+            Map<Enchantment, Integer> enchants = rune.getItemMeta().getEnchants();
+            if (!enchants.isEmpty()) {
+                Map.Entry<Enchantment, Integer> firstEnchant = enchants.entrySet().iterator().next();
+                enchantName = firstEnchant.getKey().getKey().getKey();
+                enchantLevel = firstEnchant.getValue();
             }
-            
-            final String finalEnchantId = enchantId != null ? enchantId : enchantName;
-            final String finalEnchantName = enchantName;
-            final int finalEnchantLevel = enchantLevel;
-            final int finalCost = cost;
-            final int finalCoinCost = coinCost;
-            
-            plugin.getDatabaseManager().recordRollAsync(
-                player.getUniqueId(),
-                player.getName(),
-                chosenTier,
-                finalEnchantId,
-                finalEnchantName,
-                finalEnchantLevel,
-                finalCost,
-                finalCoinCost,
-                tableLocation
-            );
         }
-        
-        // Check milestones
-        if (plugin.getConfig().getBoolean("milestones.enabled", true)) {
-            checkMilestones(player);
-        }
-        
-        // Track quest progress
-        if (plugin.getQuestListener() != null) {
-            plugin.getQuestListener().onRuneRoll(player, chosenTier);
-        }
-        
-        // Set cooldown
-        if (plugin.getConfig().getBoolean("cooldown.enabled", true)) {
-            plugin.getCooldownManager().setCooldown(player.getUniqueId());
-        }
-    }    public ItemStack createRuneItem(RuneTier tier) {
+
+        String finalEnchantId = enchantId != null ? enchantId : enchantName;
+        String finalEnchantName = enchantName;
+        int finalEnchantLevel = enchantLevel;
+        int finalCost = cost;
+        int finalCoinCost = coinCost;
+
+        plugin.getDatabaseManager().recordRollAsync(
+            player.getUniqueId(),
+            player.getName(),
+            chosenTier,
+            finalEnchantId,
+            finalEnchantName,
+            finalEnchantLevel,
+            finalCost,
+            finalCoinCost,
+            tableLocation
+        );
+    }
+
+    public ItemStack createRuneItem(RuneTier tier) {
         org.bukkit.configuration.file.FileConfiguration runesConfig = plugin.getRunesConfig();
         String tierPath = "tiers." + tier.name().toLowerCase();
         

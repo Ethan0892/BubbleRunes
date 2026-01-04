@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - Improved EcoEnchants enchanted-book generation by using more forgiving enchant ID lookup (namespaced keys + separator/case normalization) and better debug logging when an enchant cannot be resolved.
 
+## [1.0.5] - 2026-01-04
+
+### Changed
+- Refactored `RuneService#grantRune` into smaller helpers to reduce method complexity and improve maintainability.
+
+### Fixed
+- Cleaned up minor style issues (one-statement-per-line, formatting around method boundaries).
+
 ## [1.0.3] - 2026-01-04
 
 ### Added
