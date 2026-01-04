@@ -37,32 +37,44 @@ public class RuneGUIListener implements Listener {
             ItemStack clicked = event.getCurrentItem();
             if (clicked == null || clicked.getType() == Material.AIR) return;
             
-            // Determine which tier was clicked based on slot
             int slot = event.getSlot();
-            RuneTier chosenTier = null;
-            
-            switch (slot) {
-                case 10: chosenTier = RuneTier.COMMON; break;
-                case 11: chosenTier = RuneTier.UNCOMMON; break;
-                case 12: chosenTier = RuneTier.RARE; break;
-                case 13: chosenTier = RuneTier.EPIC; break;
-                case 14: chosenTier = RuneTier.LEGENDARY; break;
-                case 15: chosenTier = RuneTier.SPECIAL; break;
-                case 16: chosenTier = RuneTier.VERYSPECIAL; break;
-                default: return; // Not a tier button
+
+            // Only the bottom-middle button rolls a rune
+            if (slot != 22) {
+                return;
             }
             
             // Check cooldown
             if (plugin.getConfig().getBoolean("cooldown.enabled", true)) {
                 if (plugin.getCooldownManager().isOnCooldown(player.getUniqueId())) {
                     long remaining = plugin.getCooldownManager().getRemainingCooldown(player.getUniqueId());
-                    String msg = plugin.getConfig().getString("messages.cooldown", 
+                    String msg = plugin.getMessage("messages.cooldown", 
                         "&cYou must wait %seconds% seconds before using the rune table again!");
                     msg = msg.replace("%seconds%", String.valueOf(remaining));
                     player.sendMessage(TextFormatter.format(msg));
                     player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
                     return;
                 }
+            }
+
+            RuneTier chosenTier = runeService.getRandomAffordableTier(player);
+            if (chosenTier == null) {
+                int minCost = runeService.getTierMinXpCost(RuneTier.COMMON);
+                int coinCost = 0;
+                if (runeService.isBubbleCoinEconomyAvailable()) {
+                    coinCost = plugin.getConfig().getInt("economy.bubbleCoinCosts.common",
+                        plugin.getConfig().getInt("economy.bubbleCoinCost", 1));
+                }
+                int playerXp = ExperienceUtil.getTotalExperience(player);
+                String msg = plugin.getMessage("messages.notEnoughXp",
+                    "&cYou need at least %cost_xp% XP and %cost_coins% BubbleCoins to roll a %tier% rune!");
+                msg = msg
+                    .replace("%tier%", "common")
+                    .replace("%cost_xp%", String.valueOf(minCost))
+                    .replace("%cost_coins%", String.valueOf(Math.max(0, coinCost)));
+                player.sendMessage(TextFormatter.format(msg));
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
+                return;
             }
             
             // Get table location from metadata
@@ -78,7 +90,34 @@ public class RuneGUIListener implements Listener {
             
             // Close GUI and grant chosen rune tier
             player.closeInventory();
-            runeService.grantRune(player, tableLocation, chosenTier);
+
+            // Crate-like "rolling" delay (configurable)
+            boolean gambleEnabled = plugin.getConfig().getBoolean("gambleRoll.enabled", true);
+            long delayTicks = plugin.getConfig().getLong("gambleRoll.delayTicks", 40L);
+            if (delayTicks < 0L) delayTicks = 0L;
+
+            if (gambleEnabled && delayTicks > 0L) {
+                if (plugin.getConfig().getBoolean("sounds.enabled", true)) {
+                    player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.7f, 1.2f);
+                }
+                String rollingMsg = plugin.getMessage(
+                    "messages.gambleRolling",
+                    "&7Rolling... &f%tier% &7tier");
+                rollingMsg = rollingMsg.replace("%tier%", chosenTier.name().toLowerCase());
+                player.sendMessage(TextFormatter.format(rollingMsg));
+
+                Location finalTableLocation = tableLocation;
+                RuneTier finalChosenTier = chosenTier;
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (!player.isOnline()) return;
+                    if (plugin.getConfig().getBoolean("sounds.enabled", true)) {
+                        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.7f, 1.6f);
+                    }
+                    runeService.grantRune(player, finalTableLocation, finalChosenTier);
+                }, delayTicks);
+            } else {
+                runeService.grantRune(player, tableLocation, chosenTier);
+            }
             
             // Clean up metadata
             player.removeMetadata("runetable_location", plugin);

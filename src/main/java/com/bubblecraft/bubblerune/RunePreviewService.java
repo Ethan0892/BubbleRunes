@@ -57,8 +57,6 @@ public class RunePreviewService {
             line = line.replace("%tier%", tier.name());
             lore.add(TextFormatter.toComponent(line));
         }
-        // Hidden marker for enchant ID (used for reveal mechanic)
-        lore.add(TextFormatter.toComponent("<dark_gray>Enchantment ID: " + enchantId));
         meta.lore(lore);
         
         // Set custom model data from preview settings or tier-specific
@@ -75,6 +73,9 @@ public class RunePreviewService {
             meta.addEnchant(Enchantment.UNBREAKING, 1, true);
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
         }
+
+        // Mark as a genuine preview rune (stores the hidden enchant ID securely)
+        RuneItemData.markPreviewRune(plugin, meta, tier, enchantId);
         
         item.setItemMeta(meta);
         return item;
@@ -85,20 +86,7 @@ public class RunePreviewService {
      * Enhanced with better validation.
      */
     public boolean isPreviewRune(ItemStack item) {
-        if (item == null || item.getType().isAir()) return false;
-        
-        ItemMeta meta = item.getItemMeta();
-        if (meta == null) return false;
-        
-        // Check using modern lore API
-        List<net.kyori.adventure.text.Component> lore = meta.lore();
-        if (lore == null || lore.isEmpty()) return false;
-        
-        // Check if last line contains the hidden enchantment ID marker
-        String lastLine = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
-            .serialize(lore.get(lore.size() - 1));
-        
-        return lastLine.contains("Enchantment ID:");
+        return RuneItemData.isPreviewRune(item, plugin);
     }
     
     /**
@@ -106,21 +94,6 @@ public class RunePreviewService {
      * Uses modern Component API for better compatibility.
      */
     public String getEnchantIdFromPreview(ItemStack item) {
-        if (!isPreviewRune(item)) return null;
-        
-        ItemMeta meta = item.getItemMeta();
-        if (meta == null) return null;
-        
-        List<net.kyori.adventure.text.Component> lore = meta.lore();
-        if (lore == null || lore.isEmpty()) return null;
-        
-        String lastLine = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
-            .serialize(lore.get(lore.size() - 1));
-        
-        if (lastLine.contains("Enchantment ID:")) {
-            return lastLine.replace("Enchantment ID:", "").trim();
-        }
-        
-        return null;
+        return RuneItemData.getPreviewEnchantId(item, plugin);
     }
 }

@@ -33,7 +33,7 @@ public class RuneTableGUI {
             gui.setItem(i, glass);
         }
         
-        int playerXp = player.getTotalExperience();
+        int playerXp = ExperienceUtil.getTotalExperience(player);
         boolean onCooldown = plugin.getConfig().getBoolean("cooldown.enabled", true) && 
                            plugin.getCooldownManager().isOnCooldown(player.getUniqueId());
         
@@ -47,37 +47,37 @@ public class RuneTableGUI {
             ItemStack tierButton = createTierButton(tier, playerXp, onCooldown);
             gui.setItem(slots[i], tierButton);
         }
+
+        // Primary action button at bottom middle
+        ItemStack getRuneButton = createGetRuneButton(player, playerXp, onCooldown);
+        gui.setItem(22, getRuneButton);
         
-        // Info item at bottom
+        // Optional info item moved to bottom right (avoids conflicting with Get Rune)
         ItemStack info = new ItemStack(Material.BOOK);
         ItemMeta infoMeta = info.getItemMeta();
         if (infoMeta != null) {
-            infoMeta.displayName(TextFormatter.toComponent("&6&lHow to Use"));
+            infoMeta.displayName(TextFormatter.toComponent("&6&lInfo"));
             List<String> infoLore = new ArrayList<>();
-            infoLore.add(TextFormatter.format("&7Click on a tier above to"));
-            infoLore.add(TextFormatter.format("&7roll a rune of that tier!"));
+            infoLore.add(TextFormatter.format("&7Browse rune tiers above."));
+            infoLore.add(TextFormatter.format("&7Then click &aGet Rune&7."));
             infoLore.add("");
             infoLore.add(TextFormatter.format("&7Your XP: &e" + playerXp));
-            
-            // Show BubbleCoin balance if enabled
-            if (plugin.getConfig().getBoolean("economy.bubbleCoinEnabled", true)) {
+
+            if (plugin.getRuneService().isBubbleCoinEconomyAvailable()) {
                 double coins = plugin.getRuneService().getPlayerCoins(player);
                 infoLore.add(TextFormatter.format("&7Your BubbleCoins: &e" + String.format("%.0f", coins)));
-                int coinCost = plugin.getConfig().getInt("economy.bubbleCoinCost", 1);
-                infoLore.add("");
-                infoLore.add(TextFormatter.format("&7Cost per roll: &e" + coinCost + " BubbleCoin" + (coinCost > 1 ? "s" : "")));
             }
-            
+
             if (onCooldown) {
                 long remaining = plugin.getCooldownManager().getRemainingCooldown(player.getUniqueId());
                 infoLore.add("");
                 infoLore.add(TextFormatter.format("&cCooldown: &f" + remaining + "s"));
             }
-            
+
             infoMeta.setLore(infoLore);
             info.setItemMeta(infoMeta);
         }
-        gui.setItem(22, info);
+        gui.setItem(26, info);
         
         // Store table location in player metadata for later use
         player.setMetadata("runetable_location", new org.bukkit.metadata.FixedMetadataValue(plugin, tableLocation));
@@ -91,8 +91,9 @@ public class RuneTableGUI {
      */
     private ItemStack createTierButton(RuneTier tier, int playerXp, boolean onCooldown) {
         String tierPath = "tiers." + tier.name().toLowerCase();
-        int minCost = plugin.getConfig().getInt(tierPath + ".xpCost.min", 1000);
-        int maxCost = plugin.getConfig().getInt(tierPath + ".xpCost.max", minCost);
+        int minCost = plugin.getRuneService().getTierMinXpCost(tier);
+        int maxCost = plugin.getRuneService().getTierMaxXpCost(tier);
+        if (maxCost < minCost) maxCost = minCost;
         
         boolean canAfford = playerXp >= minCost;
         
@@ -133,12 +134,12 @@ public class RuneTableGUI {
                 lore.add(TextFormatter.format("&7Required: &e" + minCost + " XP"));
                 lore.add(TextFormatter.format("&7You have: &e" + playerXp + " XP"));
             } else {
-                lore.add(TextFormatter.format("&aClick to roll!"));
+                lore.add(TextFormatter.format("&aEligible"));
                 lore.add("");
                 lore.add(TextFormatter.format("&7XP Cost: &e" + minCost + "-" + maxCost + " XP"));
                 
-                // Show BubbleCoin cost if enabled
-                if (plugin.getConfig().getBoolean("economy.bubbleCoinEnabled", true)) {
+                // Show BubbleCoin cost if enabled and available
+                if (plugin.getRuneService().isBubbleCoinEconomyAvailable()) {
                     String coinPath = "economy.bubbleCoinCosts." + tier.name().toLowerCase();
                     int coinCost = plugin.getConfig().getInt(coinPath, plugin.getConfig().getInt("economy.bubbleCoinCost", 1));
                     if (coinCost > 0) {
@@ -148,11 +149,15 @@ public class RuneTableGUI {
                 
                 lore.add(TextFormatter.format("&7You have: &e" + playerXp + " XP"));
                 
-                // Show enchants for this tier
+                // Show possible runes (enchant pool) for this tier
                 List<String> enchants = plugin.getConfig().getStringList(tierPath + ".enchants");
                 if (!enchants.isEmpty()) {
                     lore.add("");
-                    lore.add(TextFormatter.format("&7Possible Enchants: &f" + enchants.size()));
+                    lore.add(TextFormatter.format("&7Potential Runes (&f" + enchants.size() + "&7):"));
+                    for (String enchantId : enchants) {
+                        if (enchantId == null || enchantId.isBlank()) continue;
+                        lore.add(TextFormatter.format("&8- &f" + enchantId));
+                    }
                 }
             }
             
@@ -167,6 +172,53 @@ public class RuneTableGUI {
             button.setItemMeta(meta);
         }
         
+        return button;
+    }
+
+    private ItemStack createGetRuneButton(Player player, int playerXp, boolean onCooldown) {
+        RuneTier bestTier = plugin.getRuneService().getBestAffordableTier(player);
+        boolean canRoll = !onCooldown && bestTier != null;
+
+        Material material;
+        if (onCooldown) {
+            material = Material.RED_STAINED_GLASS_PANE;
+        } else if (!canRoll) {
+            material = Material.GRAY_STAINED_GLASS_PANE;
+        } else {
+            material = Material.EMERALD;
+        }
+
+        ItemStack button = new ItemStack(material);
+        ItemMeta meta = button.getItemMeta();
+        if (meta != null) {
+            meta.displayName(TextFormatter.toComponent("&a&lGet Rune"));
+
+            List<String> lore = new ArrayList<>();
+            if (onCooldown) {
+                long remaining = plugin.getCooldownManager().getRemainingCooldown(player.getUniqueId());
+                lore.add(TextFormatter.format("&cOn Cooldown!"));
+                lore.add(TextFormatter.format("&7Wait &f" + remaining + "s &7and try again."));
+            } else if (!canRoll) {
+                int minCost = plugin.getRuneService().getTierMinXpCost(RuneTier.COMMON);
+                lore.add(TextFormatter.format("&cNot Enough XP!"));
+                lore.add(TextFormatter.format("&7Minimum: &e" + minCost + " XP"));
+                lore.add(TextFormatter.format("&7You have: &e" + playerXp + " XP"));
+            } else {
+                lore.add(TextFormatter.format("&7Rolls a random tier you can afford."));
+                lore.add("");
+                lore.add(TextFormatter.format("&7Max Affordable: &f" + bestTier.name()));
+                lore.add(TextFormatter.format("&aClick to roll!"));
+            }
+
+            meta.setLore(lore);
+
+            if (canRoll) {
+                meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+                meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            }
+            button.setItemMeta(meta);
+        }
+
         return button;
     }
     

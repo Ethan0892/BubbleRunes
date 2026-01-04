@@ -58,8 +58,8 @@ public class WeeklyQuestManager {
         // Notify online players
         for (Player player : Bukkit.getOnlinePlayers()) {
             player.sendMessage(TextFormatter.format(
-                plugin.getConfig().getString("weeklyQuests.messages.reset", 
-                "&6&lWeekly Quests Reset! &eNew challenges await!")));
+                plugin.getMessage("weeklyQuests.reset",
+                plugin.getConfig().getString("weeklyQuests.messages.reset", "&6&lWeekly Quests Reset! &eNew challenges await!"))));
         }
     }
     
@@ -108,8 +108,8 @@ public class WeeklyQuestManager {
                 player.getInventory().addItem(rune);
                 
                 player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    plugin.getConfig().getString("weeklyQuests.messages.complete",
-                    "&a&lQuest Complete! &f%quest%")
+                    plugin.getMessage("weeklyQuests.complete",
+                    plugin.getConfig().getString("weeklyQuests.messages.complete", "&a&lQuest Complete! &f%quest%"))
                     .replace("%quest%", questName)));
                 player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                     "&6Reward: &f" + tier.name() + " &6Rune"));

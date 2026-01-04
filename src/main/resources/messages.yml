@@ -1,0 +1,99 @@
+# BubbleRune messages
+#
+# Text Formatting Support:
+# - Legacy: Use & for color codes (&a = green, &l = bold, etc.)
+# - MiniMessage: Use <> tags (<green>, <bold>, <gradient>, etc.)
+# - Hex RGB: &#rrggbb, &x&r&r&g&g&b&b, §x§r§r§g§g§b§b, <#rrggbb>
+#
+# Placeholders used in messages:
+# - %tier%        Tier key (common/uncommon/...)
+# - %cost_xp%     XP cost
+# - %cost_coins%  Coin cost
+# - %enchant%     Enchant ID/name
+# - %seconds%     Cooldown seconds
+# - %player%      Player name
+# - %count%       Count of items combined
+# - %newtier%     New tier key
+# - %quest%       Quest name
+
+messages:
+  runeReceived: "&aYou received a &f%tier% &arune! (-%cost_xp% XP, -%cost_coins% BubbleCoins)"
+  notEnoughXp: "&cYou need at least %cost_xp% XP and %cost_coins% BubbleCoins to roll a %tier% rune!"
+  notEnoughCoins: "&cYou need %cost_coins% BubbleCoins to roll a rune!"
+  inventoryFull: "&cYour inventory is full! Clear a slot first."
+  runeRevealed: "&aYour rune revealed a &f%enchant% &abook!"
+  cooldown: "&cYou must wait %seconds% seconds before using the rune table again!"
+  gambleRolling: "&7Rolling... &f%tier% &7tier"
+  runeCombined: "&aYou combined %count% &f%tier% &arunes into a &f%newtier% &arune!"
+  broadcast: "&6&l✦ &e%player% &6rolled a &f%tier% &6rune! &6&l✦"
+  coinsEngineNotFound: "&cCoinsEngine plugin not found! BubbleCoin costs disabled."
+  pluginDisabled: "&cBubbleRune is currently disabled."
+  invalidTierSelection: "&cInvalid tier selection!"
+  failedDeductCoinsRefunded: "&cFailed to deduct BubbleCoins! XP refunded."
+  errorCreatingRuneRefunded: "&cError creating rune! XP and coins refunded."
+  runeItemMissingTierData: "&cThis rune item is missing tier data. Please contact staff."
+  noEnchantsConfiguredForTier: "&cNo enchants configured for this rune tier."
+  couldNotCreateBookForEnchant: "&cCould not create enchanted book for: %enchant%"
+  runeTierCannotBeUpgraded: "&cThis rune tier cannot be upgraded further!"
+
+command:
+  help: |
+    &eBubbleRune v%version%
+    &eCommands:
+    &7  /%label% reload - Reload configuration
+    &7  /%label% settable [name] - Set rune table location
+    &7  /%label% gui - Open rune GUI
+    &7  /%label% giverune <player> <tier> - Give a rune
+    &7  /%label% testroll - Test tier rolling
+    &7  /%label% quests - View weekly quests
+    &7  /%label% debug [on|off|toggle] - Toggle debug logging
+    &7  /%label% stats - View your statistics
+    &7  /%label% history [limit] - View roll history
+    &7  /%label% leaderboard [limit] - View top rollers
+  noPermission: "&cNo permission."
+  onlyPlayers: "&cOnly players can use this."
+  reloadSuccess: "&aBubbleRune config, runes.yml, and messages.yml reloaded."
+  tableSet: "&aRune table '&f%name%&a' location set at your position."
+  guiDisabled: "&cRune GUI is disabled."
+  giveruneUsage: "&cUsage: /%label% giverune <player> <tier>"
+  playerNotFound: "&cPlayer not found."
+  invalidTier: "&cInvalid tier."
+  gaveRune: "&aGave a &f%tier% &arune to &f%player%&a."
+  testrollResult: "&eRolled tier: &f%tier%"
+  debugUsage: "&cUsage: /%label% debug [on|off|toggle]"
+  debugStatus: "&aBubbleRune debug is now: &f%value%"
+  weeklyQuestsDisabled: "&cWeekly quests are not enabled."
+  weeklyQuestsHeader: "&6&l━━━━━━ Weekly Quests ━━━━━━"
+  weeklyQuestsResetsIn: "&7Resets in: &e%time%"
+  weeklyQuestCompletedLine: "&a✔ &f%name% &7- &aCompleted!"
+  weeklyQuestLine: "&7▪ &f%name%"
+  weeklyQuestDescriptionLine: "  &8%description%"
+  weeklyQuestProgressLine: "  &7Progress: &e%current%&7/&e%required%"
+  weeklyQuestRewardLine: "  &7Reward: &f%rewardTier% &7Rune"
+  blankLine: ""
+  databaseNotAvailable: "&cDatabase not available."
+  noRollsYet: "&cYou haven't rolled any runes yet!"
+  statsHeader: "&6&l━━━━━━ Your Rune Statistics ━━━━━━"
+  statsTotalRolls: "&7Total Rolls: &e%value%"
+  statsTotalXpSpent: "&7Total XP Spent: &e%value%"
+  statsTotalCoinsSpent: "&7Total Coins Spent: &e%value%"
+  statsTierBreakdownHeader: "&7Tier Breakdown:"
+  statsTierCommon: "  &fCommon: &7%value%"
+  statsTierUncommon: "  &aUncommon: &7%value%"
+  statsTierRare: "  &9Rare: &7%value%"
+  statsTierEpic: "  &5Epic: &7%value%"
+  statsTierLegendary: "  &6Legendary: &7%value%"
+  statsTierSpecial: "  &bSpecial: &7%value%"
+  statsTierVerySpecial: "  &dVery Special: &7%value%"
+  sectionFooter: "&6&l━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  errorLoadingStats: "&cError loading stats: %error%"
+  invalidNumberUsingDefaultLimit: "&cInvalid number. Using default limit of 10."
+  historyHeader: "&6&l━━━━━━ Recent Rolls (%count%) ━━━━━━"
+  errorLoadingHistory: "&cError loading history: %error%"
+  leaderboardHeader: "&6&l━━━━━━ Top Rune Rollers ━━━━━━"
+  errorLoadingLeaderboard: "&cError loading leaderboard: %error%"
+  unknownSubcommand: "&cUnknown subcommand."
+
+weeklyQuests:
+  reset: "&6&lWeekly Quests Reset! &eNew challenges await!"
+  complete: "&a&lQuest Complete! &f%quest%"

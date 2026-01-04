@@ -27,12 +27,126 @@ public class RuneService {
     private final Object reloadLock = new Object();
     private boolean coinsEngineAvailable = false;
     private Object coinsEngineAPI = null;
+    private volatile boolean coinsEngineIncompatibleLogged = false;
 
     public RuneService(BubbleRunePlugin plugin) {
         this.plugin = plugin;
         this.previewService = new RunePreviewService(plugin);
         initializeCoinsEngine();
         reload();
+    }
+
+    private double getXpCostMultiplier() {
+        double multiplier = plugin.getConfig().getDouble("xpCost.multiplier", 1.0);
+        if (Double.isNaN(multiplier) || Double.isInfinite(multiplier)) return 1.0;
+        return Math.max(0.0, multiplier);
+    }
+
+    private int applyXpMultiplier(int baseCost) {
+        if (baseCost <= 0) return 0;
+        double multiplier = getXpCostMultiplier();
+        long scaled = Math.round(baseCost * multiplier);
+        if (scaled <= 0) return 0;
+        if (scaled > Integer.MAX_VALUE) return Integer.MAX_VALUE;
+        return (int) scaled;
+    }
+
+    /**
+     * Returns the configured minimum XP cost for a tier (after multiplier).
+     */
+    public int getTierMinXpCost(RuneTier tier) {
+        FileConfiguration config = plugin.getConfig();
+        String tierPath = "tiers." + tier.name().toLowerCase();
+        int min = config.getInt(tierPath + ".xpCost.min", minXp);
+        if (min < 0) min = 0;
+        return applyXpMultiplier(min);
+    }
+
+    /**
+     * Returns the configured maximum XP cost for a tier (after multiplier).
+     */
+    public int getTierMaxXpCost(RuneTier tier) {
+        FileConfiguration config = plugin.getConfig();
+        String tierPath = "tiers." + tier.name().toLowerCase();
+        int max = config.getInt(tierPath + ".xpCost.max", maxXp);
+        if (max < 0) max = 0;
+        return applyXpMultiplier(max);
+    }
+
+    /**
+     * Returns the highest tier the player can currently afford.
+     * Considers XP minimums and (if enabled/available) per-tier BubbleCoin costs.
+     */
+    public RuneTier getBestAffordableTier(Player player) {
+        if (player == null) return null;
+
+        int playerXp = ExperienceUtil.getTotalExperience(player);
+        boolean coinsAvailable = isBubbleCoinEconomyAvailable();
+        double playerCoins = coinsAvailable ? getPlayerCoins(player) : 0.0;
+
+        RuneTier[] descending = {
+            RuneTier.VERYSPECIAL,
+            RuneTier.SPECIAL,
+            RuneTier.LEGENDARY,
+            RuneTier.EPIC,
+            RuneTier.RARE,
+            RuneTier.UNCOMMON,
+            RuneTier.COMMON
+        };
+
+        for (RuneTier tier : descending) {
+            int minXp = getTierMinXpCost(tier);
+            if (playerXp < minXp) continue;
+
+            if (coinsAvailable) {
+                String coinPath = "economy.bubbleCoinCosts." + tier.name().toLowerCase();
+                int coinCost = plugin.getConfig().getInt(coinPath, plugin.getConfig().getInt("economy.bubbleCoinCost", 1));
+                if (coinCost > 0 && playerCoins < coinCost) continue;
+            }
+
+            return tier;
+        }
+
+        return null;
+    }
+
+    /**
+     * Returns a random tier the player can currently afford.
+     * Considers XP minimums and (if enabled/available) per-tier BubbleCoin costs.
+     */
+    public RuneTier getRandomAffordableTier(Player player) {
+        if (player == null) return null;
+
+        int playerXp = ExperienceUtil.getTotalExperience(player);
+        boolean coinsAvailable = isBubbleCoinEconomyAvailable();
+        double playerCoins = coinsAvailable ? getPlayerCoins(player) : 0.0;
+
+        RuneTier[] all = {
+            RuneTier.COMMON,
+            RuneTier.UNCOMMON,
+            RuneTier.RARE,
+            RuneTier.EPIC,
+            RuneTier.LEGENDARY,
+            RuneTier.SPECIAL,
+            RuneTier.VERYSPECIAL
+        };
+
+        List<RuneTier> affordable = new ArrayList<>();
+        for (RuneTier tier : all) {
+            int minXp = getTierMinXpCost(tier);
+            if (playerXp < minXp) continue;
+
+            if (coinsAvailable) {
+                String coinPath = "economy.bubbleCoinCosts." + tier.name().toLowerCase();
+                int coinCost = plugin.getConfig().getInt(coinPath, plugin.getConfig().getInt("economy.bubbleCoinCost", 1));
+                if (coinCost > 0 && playerCoins < coinCost) continue;
+            }
+
+            affordable.add(tier);
+        }
+
+        if (affordable.isEmpty()) return null;
+        return affordable.get(random.nextInt(affordable.size()));
     }
 
     public void reload() {
@@ -99,13 +213,20 @@ public class RuneService {
             int max = config.getInt(tierPath + ".xpCost.max", maxXp);
             if (min < 0) min = 0;
             if (max < min) max = min;
-            if (min == max) return min;
-            return min + random.nextInt(max - min + 1);
+
+            int rolled;
+            if (min == max) {
+                rolled = min;
+            } else {
+                rolled = min + random.nextInt(max - min + 1);
+            }
+
+            return applyXpMultiplier(rolled);
         }
         
         // Fall back to legacy global setting
-        if (minXp == maxXp) return minXp;
-        return minXp + random.nextInt(maxXp - minXp + 1);
+        if (minXp == maxXp) return applyXpMultiplier(minXp);
+        return applyXpMultiplier(minXp + random.nextInt(maxXp - minXp + 1));
     }
 
     /**
@@ -130,8 +251,7 @@ public class RuneService {
                            RuneTier.EPIC, RuneTier.RARE, RuneTier.UNCOMMON, RuneTier.COMMON};
         
         for (RuneTier tier : tiers) {
-            String tierPath = "tiers." + tier.name().toLowerCase();
-            int minCost = plugin.getConfig().getInt(tierPath + ".xpCost.min", Integer.MAX_VALUE);
+            int minCost = getTierMinXpCost(tier);
             
             if (playerXp >= minCost) {
                 return tier;
@@ -202,42 +322,53 @@ public class RuneService {
         }
         
         if (chosenTier == null) {
-            player.sendMessage(TextFormatter.format("&cInvalid tier selection!"));
+            player.sendMessage(TextFormatter.format(plugin.getMessage(
+                "messages.invalidTierSelection",
+                "&cInvalid tier selection!")));
             return;
         }
         
-        int currentXp = player.getTotalExperience();
-        
-        // Get cost for the chosen tier
-        int cost = getRandomXpCost(chosenTier);
-        
-        // Get BubbleCoin cost for this tier
-        int coinCost = getBubbleCoinCost(chosenTier);
-        
+        int currentXp = ExperienceUtil.getTotalExperience(player);
+
         // Verify player can afford the chosen tier (XP)
-        String tierPath = "tiers." + chosenTier.name().toLowerCase();
-        int minCost = plugin.getConfig().getInt(tierPath + ".xpCost.min", cost);
-        
+        int minCost = getTierMinXpCost(chosenTier);
+
         if (currentXp < minCost) {
-            String template = plugin.getConfig().getString("messages.notEnoughXp", "&cYou need at least %cost_xp% XP and %cost_coins% BubbleCoins to roll a %tier% rune!");
+            int coinCost = getBubbleCoinCost(chosenTier);
+            String template = plugin.getMessage("messages.notEnoughXp", "&cYou need at least %cost_xp% XP and %cost_coins% BubbleCoins to roll a %tier% rune!");
             String msg = TextFormatter.format(template
                 .replace("%cost%", String.valueOf(minCost)) // Legacy placeholder support
                 .replace("%cost_xp%", String.valueOf(minCost))
                 .replace("%cost_coins%", String.valueOf(coinCost))
                 .replace("%tier%", chosenTier.name().toLowerCase()));
             player.sendMessage(msg);
-            
+
             // Play fail sound with pitch variation
             if (plugin.getConfig().getBoolean("sounds.enabled", true)) {
                 player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
             }
             return;
         }
+
+        // Roll an XP cost that the player can actually pay.
+        int maxCost = getTierMaxXpCost(chosenTier);
+        if (maxCost < minCost) maxCost = minCost;
+
+        int effectiveMaxCost = Math.min(maxCost, currentXp);
+        int cost;
+        if (effectiveMaxCost <= minCost) {
+            cost = minCost;
+        } else {
+            cost = minCost + random.nextInt(effectiveMaxCost - minCost + 1);
+        }
+        
+        // Get BubbleCoin cost for this tier
+        int coinCost = getBubbleCoinCost(chosenTier);
         
         // Check BubbleCoin balance if enabled
         if (isBubbleCoinEnabled() && coinCost > 0) {
             if (!hasEnoughCoins(player, coinCost)) {
-                String template = plugin.getConfig().getString("messages.notEnoughCoins", "&cYou need %cost_coins% BubbleCoins to roll a rune!");
+                String template = plugin.getMessage("messages.notEnoughCoins", "&cYou need %cost_coins% BubbleCoins to roll a rune!");
                 String msg = TextFormatter.format(template.replace("%cost_coins%", String.valueOf(coinCost)));
                 player.sendMessage(msg);
                 
@@ -250,22 +381,29 @@ public class RuneService {
         
         // Check if inventory has space
         if (player.getInventory().firstEmpty() == -1) {
-            String msg = TextFormatter.format(plugin.getConfig().getString("messages.inventoryFull", "&cYour inventory is full! Clear a slot first."));
+            String msg = TextFormatter.format(plugin.getMessage("messages.inventoryFull", "&cYour inventory is full! Clear a slot first."));
             player.sendMessage(msg);
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
             return;
         }
 
         // Deduct XP
-        player.setTotalExperience(currentXp - cost);
+        int newTotalXp = currentXp - cost;
+        if (newTotalXp < 0) {
+            // Should not happen due to affordability logic, but keep it bulletproof.
+            newTotalXp = 0;
+        }
+        ExperienceUtil.setTotalExperience(player, newTotalXp);
         
         // Deduct BubbleCoins if enabled
         boolean coinsDeducted = false;
         if (isBubbleCoinEnabled() && coinCost > 0) {
             if (!deductCoins(player, coinCost)) {
                 // Refund XP if coin deduction fails
-                player.setTotalExperience(currentXp);
-                player.sendMessage(TextFormatter.format("&cFailed to deduct BubbleCoins! XP refunded."));
+                ExperienceUtil.setTotalExperience(player, currentXp);
+                player.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "messages.failedDeductCoinsRefunded",
+                    "&cFailed to deduct BubbleCoins! XP refunded.")));
                 return;
             }
             coinsDeducted = true;
@@ -282,9 +420,11 @@ public class RuneService {
                 enchantId = getRandomEnchantIdForTier(chosenTier);
                 if (enchantId == null) {
                     plugin.getLogger().warning("No enchantments available for tier: " + chosenTier);
-                    player.setTotalExperience(currentXp); // Refund XP
+                    ExperienceUtil.setTotalExperience(player, currentXp); // Refund XP
                     if (coinsDeducted) refundCoins(player, coinCost); // Refund coins
-                    player.sendMessage(TextFormatter.format("&cError creating rune! XP and coins refunded."));
+                    player.sendMessage(TextFormatter.format(plugin.getMessage(
+                        "messages.errorCreatingRuneRefunded",
+                        "&cError creating rune! XP and coins refunded.")));
                     return;
                 }
                 rune = previewService.createPreviewRune(chosenTier, enchantId);
@@ -294,17 +434,21 @@ public class RuneService {
             
             if (rune == null) {
                 plugin.getLogger().severe("Failed to create rune item for tier: " + chosenTier);
-                player.setTotalExperience(currentXp); // Refund XP
+                ExperienceUtil.setTotalExperience(player, currentXp); // Refund XP
                 if (coinsDeducted) refundCoins(player, coinCost); // Refund coins
-                player.sendMessage(TextFormatter.format("&cError creating rune! XP and coins refunded."));
+                player.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "messages.errorCreatingRuneRefunded",
+                    "&cError creating rune! XP and coins refunded.")));
                 return;
             }
         } catch (Exception e) {
             plugin.getLogger().severe("Exception creating rune: " + e.getMessage());
             e.printStackTrace();
-            player.setTotalExperience(currentXp); // Refund XP on error
+            ExperienceUtil.setTotalExperience(player, currentXp); // Refund XP on error
             if (coinsDeducted) refundCoins(player, coinCost); // Refund coins
-            player.sendMessage(TextFormatter.format("&cError creating rune! XP and coins refunded."));
+            player.sendMessage(TextFormatter.format(plugin.getMessage(
+                "messages.errorCreatingRuneRefunded",
+                "&cError creating rune! XP and coins refunded.")));
             return;
         }
         
@@ -316,7 +460,7 @@ public class RuneService {
             spawnEnhancedParticles(tableLocation, chosenTier);
         }
         
-        String template = plugin.getConfig().getString("messages.runeReceived", "&aYou received a &f%tier% &arune! (-%cost_xp% XP, -%cost_coins% BubbleCoins)");
+        String template = plugin.getMessage("messages.runeReceived", "&aYou received a &f%tier% &arune! (-%cost_xp% XP, -%cost_coins% BubbleCoins)");
         String message = TextFormatter.format(template
             .replace("%tier%", chosenTier.name().toLowerCase())
             .replace("%cost%", String.valueOf(cost)) // Legacy placeholder support
@@ -444,6 +588,9 @@ public class RuneService {
                 meta.addEnchant(Enchantment.UNBREAKING, 1, true);
                 meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             }
+
+            // Mark as a genuine rune item (prevents renamed/enchant-hidden items from triggering rune logic)
+            RuneItemData.markRune(plugin, meta, tier);
             
             item.setItemMeta(meta);
         }
@@ -698,7 +845,7 @@ public class RuneService {
      * Broadcasts rare rune rolls to all players using Component API
      */
     private void broadcastRoll(Player player, RuneTier tier) {
-        String template = plugin.getConfig().getString("messages.broadcast", 
+        String template = plugin.getMessage("messages.broadcast", 
             "&6&l✦ &e%player% &6rolled a &f%tier% &6rune! &6&l✦");
         String message = template
             .replace("%player%", player.getName())
@@ -736,9 +883,14 @@ public class RuneService {
         try {
             Plugin coinsPlugin = Bukkit.getPluginManager().getPlugin("CoinsEngine");
             if (coinsPlugin != null && coinsPlugin.isEnabled()) {
-                coinsEngineAvailable = true;
-                coinsEngineAPI = coinsPlugin;
-                plugin.getLogger().info("CoinsEngine integration enabled!");
+                // Only mark available if the API signatures we use exist.
+                if (verifyCoinsEngineApi()) {
+                    coinsEngineAvailable = true;
+                    coinsEngineAPI = coinsPlugin;
+                    plugin.getLogger().info("CoinsEngine integration enabled!");
+                } else {
+                    disableCoinsEngine("CoinsEngine detected but API signatures are incompatible; BubbleCoin costs disabled.", null);
+                }
             } else {
                 plugin.getLogger().warning("CoinsEngine plugin not found - BubbleCoin costs disabled");
                 if (plugin.getConfig().getBoolean("economy.requireCoinsEnginePlugin", true)) {
@@ -749,12 +901,126 @@ public class RuneService {
             plugin.getLogger().warning("Failed to hook into CoinsEngine: " + e.getMessage());
         }
     }
+
+    private void disableCoinsEngine(String reason, Throwable error) {
+        coinsEngineAvailable = false;
+        coinsEngineAPI = null;
+        if (!coinsEngineIncompatibleLogged) {
+            coinsEngineIncompatibleLogged = true;
+            if (error != null) {
+                plugin.getLogger().warning(reason + " (" + error.getClass().getSimpleName() + ": " + error.getMessage() + ")");
+            } else {
+                plugin.getLogger().warning(reason);
+            }
+        }
+    }
+
+    private boolean verifyCoinsEngineApi() {
+        try {
+            Class<?> coinsEngineClass = Class.forName("su.nightexpress.coinsengine.api.CoinsEngineAPI");
+
+            // At least one supported getBalance signature
+            if (tryGetStaticMethod(coinsEngineClass, "getBalance", org.bukkit.entity.Player.class, String.class) == null
+                && tryGetStaticMethod(coinsEngineClass, "getBalance", java.util.UUID.class, String.class) == null) {
+                return false;
+            }
+
+            // At least one supported removeBalance signature
+            if (tryGetStaticMethod(coinsEngineClass, "removeBalance", org.bukkit.entity.Player.class, String.class, double.class) == null
+                && tryGetStaticMethod(coinsEngineClass, "removeBalance", java.util.UUID.class, String.class, double.class) == null) {
+                return false;
+            }
+
+            // Optional: addBalance for refunds (if missing, we can still operate but refunds won't work).
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private java.lang.reflect.Method tryGetStaticMethod(Class<?> clazz, String name, Class<?>... params) {
+        try {
+            return clazz.getMethod(name, params);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Number invokeGetBalance(Player player, String currency) throws Exception {
+        Class<?> coinsEngineClass = Class.forName("su.nightexpress.coinsengine.api.CoinsEngineAPI");
+
+        java.lang.reflect.Method m = tryGetStaticMethod(coinsEngineClass, "getBalance", org.bukkit.entity.Player.class, String.class);
+        if (m != null) {
+            Object result = m.invoke(null, player, currency);
+            return (result instanceof Number) ? (Number) result : 0.0;
+        }
+
+        m = tryGetStaticMethod(coinsEngineClass, "getBalance", java.util.UUID.class, String.class);
+        if (m != null) {
+            Object result = m.invoke(null, player.getUniqueId(), currency);
+            return (result instanceof Number) ? (Number) result : 0.0;
+        }
+
+        throw new NoSuchMethodException("CoinsEngineAPI.getBalance(<supported signature>)");
+    }
+
+    private void invokeRemoveBalance(Player player, String currency, double amount) throws Exception {
+        Class<?> coinsEngineClass = Class.forName("su.nightexpress.coinsengine.api.CoinsEngineAPI");
+
+        java.lang.reflect.Method m = tryGetStaticMethod(coinsEngineClass, "removeBalance", org.bukkit.entity.Player.class, String.class, double.class);
+        if (m != null) {
+            m.invoke(null, player, currency, amount);
+            return;
+        }
+
+        m = tryGetStaticMethod(coinsEngineClass, "removeBalance", java.util.UUID.class, String.class, double.class);
+        if (m != null) {
+            m.invoke(null, player.getUniqueId(), currency, amount);
+            return;
+        }
+
+        throw new NoSuchMethodException("CoinsEngineAPI.removeBalance(<supported signature>)");
+    }
+
+    private void invokeAddBalance(Player player, String currency, double amount) throws Exception {
+        Class<?> coinsEngineClass = Class.forName("su.nightexpress.coinsengine.api.CoinsEngineAPI");
+
+        java.lang.reflect.Method m = tryGetStaticMethod(coinsEngineClass, "addBalance", org.bukkit.entity.Player.class, String.class, double.class);
+        if (m != null) {
+            m.invoke(null, player, currency, amount);
+            return;
+        }
+
+        m = tryGetStaticMethod(coinsEngineClass, "addBalance", java.util.UUID.class, String.class, double.class);
+        if (m != null) {
+            m.invoke(null, player.getUniqueId(), currency, amount);
+            return;
+        }
+
+        // Refund is best-effort.
+        throw new NoSuchMethodException("CoinsEngineAPI.addBalance(<supported signature>)");
+    }
+
+    public boolean isBubbleCoinEconomyAvailable() {
+        return isBubbleCoinEnabled();
+    }
     
     /**
      * Checks if BubbleCoin economy is enabled and available
      */
     private boolean isBubbleCoinEnabled() {
-        return plugin.getConfig().getBoolean("economy.bubbleCoinEnabled", true) && coinsEngineAvailable;
+        return plugin.getConfig().getBoolean("economy.bubbleCoinEnabled", true)
+            && "coinsengine".equalsIgnoreCase(plugin.getConfig().getString("economy.provider", "coinsengine"))
+            && coinsEngineAvailable;
+    }
+
+    private String getEconomyCurrencyId() {
+        // New config key
+        String currency = plugin.getConfig().getString("economy.currencyId", null);
+        if (currency != null && !currency.isBlank()) return currency;
+
+        // Backwards compatible key
+        return plugin.getConfig().getString("economy.bubbleCoinCurrency", "bubblecoin");
     }
     
     /**
@@ -777,17 +1043,10 @@ public class RuneService {
         if (!isBubbleCoinEnabled()) return true;
         
         try {
-            // Use CoinsEngine API
-            Class<?> coinsEngineClass = Class.forName("su.nightexpress.coinsengine.api.CoinsEngineAPI");
-            java.lang.reflect.Method getBalanceMethod = coinsEngineClass.getMethod("getBalance", 
-                org.bukkit.entity.Player.class, String.class);
-            
-            String currency = plugin.getConfig().getString("economy.bubbleCoinCurrency", "bubblecoin");
-            double balance = (double) getBalanceMethod.invoke(null, player, currency);
-            
+            double balance = invokeGetBalance(player, getEconomyCurrencyId()).doubleValue();
             return balance >= amount;
-        } catch (Exception e) {
-            plugin.getLogger().warning("Error checking BubbleCoin balance: " + e.getMessage());
+        } catch (Throwable t) {
+            disableCoinsEngine("Error checking BubbleCoin balance; disabling BubbleCoin economy", t);
             return true; // Allow transaction if check fails
         }
     }
@@ -799,18 +1058,11 @@ public class RuneService {
         if (!isBubbleCoinEnabled()) return true;
         
         try {
-            // Use CoinsEngine API
-            Class<?> coinsEngineClass = Class.forName("su.nightexpress.coinsengine.api.CoinsEngineAPI");
-            java.lang.reflect.Method removeBalanceMethod = coinsEngineClass.getMethod("removeBalance", 
-                org.bukkit.entity.Player.class, String.class, double.class);
-            
-            String currency = plugin.getConfig().getString("economy.bubbleCoinCurrency", "bubblecoin");
-            removeBalanceMethod.invoke(null, player, currency, (double) amount);
-            
+            invokeRemoveBalance(player, getEconomyCurrencyId(), (double) amount);
             return true;
-        } catch (Exception e) {
-            plugin.getLogger().severe("Error deducting BubbleCoins: " + e.getMessage());
-            return false;
+        } catch (Throwable t) {
+            disableCoinsEngine("Error deducting BubbleCoins; disabling BubbleCoin economy", t);
+            return true; // Don't block rune rolls if economy is broken
         }
     }
     
@@ -821,17 +1073,9 @@ public class RuneService {
         if (!isBubbleCoinEnabled()) return;
         
         try {
-            // Use CoinsEngine API
-            Class<?> coinsEngineClass = Class.forName("su.nightexpress.coinsengine.api.CoinsEngineAPI");
-            java.lang.reflect.Method addBalanceMethod = coinsEngineClass.getMethod("addBalance", 
-                org.bukkit.entity.Player.class, String.class, double.class);
-            
-            String currency = plugin.getConfig().getString("economy.bubbleCoinCurrency", "bubblecoin");
-            addBalanceMethod.invoke(null, player, currency, (double) amount);
-            
-            plugin.getLogger().info("Refunded " + amount + " BubbleCoins to " + player.getName());
-        } catch (Exception e) {
-            plugin.getLogger().severe("Error refunding BubbleCoins: " + e.getMessage());
+            invokeAddBalance(player, getEconomyCurrencyId(), (double) amount);
+        } catch (Throwable t) {
+            disableCoinsEngine("Error refunding BubbleCoins; disabling BubbleCoin economy", t);
         }
     }
     
@@ -842,13 +1086,9 @@ public class RuneService {
         if (!isBubbleCoinEnabled()) return 0.0;
         
         try {
-            Class<?> coinsEngineClass = Class.forName("su.nightexpress.coinsengine.api.CoinsEngineAPI");
-            java.lang.reflect.Method getBalanceMethod = coinsEngineClass.getMethod("getBalance", 
-                org.bukkit.entity.Player.class, String.class);
-            
-            String currency = plugin.getConfig().getString("economy.bubbleCoinCurrency", "bubblecoin");
-            return (double) getBalanceMethod.invoke(null, player, currency);
-        } catch (Exception e) {
+            return invokeGetBalance(player, getEconomyCurrencyId()).doubleValue();
+        } catch (Throwable t) {
+            disableCoinsEngine("Error reading BubbleCoin balance; disabling BubbleCoin economy", t);
             return 0.0;
         }
     }

@@ -6,14 +6,20 @@ import org.jetbrains.annotations.NotNull;
 
 public class BubbleRunePlaceholderExpansion extends PlaceholderExpansion {
     private final BubbleRunePlugin plugin;
+    private final String identifier;
 
-    public BubbleRunePlaceholderExpansion(BubbleRunePlugin plugin) {
+    public BubbleRunePlaceholderExpansion(BubbleRunePlugin plugin, String identifier) {
         this.plugin = plugin;
+        this.identifier = (identifier == null || identifier.isBlank()) ? "bubblerune" : identifier;
+    }
+
+    private PlaceholderStatsCache cache() {
+        return plugin.getPlaceholderStatsCache();
     }
 
     @Override
     public @NotNull String getIdentifier() {
-        return "bubblerune";
+        return identifier;
     }
 
     @Override
@@ -34,14 +40,17 @@ public class BubbleRunePlaceholderExpansion extends PlaceholderExpansion {
     @Override
     public String onRequest(OfflinePlayer player, @NotNull String params) {
         StatsManager stats = plugin.getStatsManager();
+        PlaceholderStatsCache cache = cache();
         
         // Basic stats
         if (params.equalsIgnoreCase("total_rolls")) {
+            if (cache != null) return String.valueOf(cache.getGlobalTotalRolls());
             return String.valueOf(stats.getTotalRolls());
         }
         
         if (params.equalsIgnoreCase("player_rolls")) {
             if (player == null) return "0";
+            if (cache != null) return String.valueOf(cache.getPlayerRolls(player.getUniqueId()));
             return String.valueOf(stats.getPlayerRolls(player.getUniqueId()));
         }
         
@@ -49,6 +58,7 @@ public class BubbleRunePlaceholderExpansion extends PlaceholderExpansion {
             String tierName = params.substring(5).toUpperCase();
             try {
                 RuneTier tier = RuneTier.valueOf(tierName);
+                if (cache != null) return String.valueOf(cache.getGlobalTierCount(tier));
                 return String.valueOf(stats.getTierCount(tier));
             } catch (IllegalArgumentException e) {
                 return "0";
@@ -68,6 +78,7 @@ public class BubbleRunePlaceholderExpansion extends PlaceholderExpansion {
                 try {
                     int position = Integer.parseInt(parts[1]);
                     if (position < 1 || position > 10) return "N/A";
+                    if (cache != null) return cache.getTopPlayerName(position);
                     return stats.getTopPlayerName(position);
                 } catch (NumberFormatException e) {
                     return "N/A";
@@ -81,6 +92,7 @@ public class BubbleRunePlaceholderExpansion extends PlaceholderExpansion {
                 try {
                     int position = Integer.parseInt(parts[2]);
                     if (position < 1 || position > 10) return "0";
+                    if (cache != null) return String.valueOf(cache.getTopPlayerRolls(position));
                     return String.valueOf(stats.getTopPlayerRolls(position));
                 } catch (NumberFormatException e) {
                     return "0";
@@ -91,13 +103,17 @@ public class BubbleRunePlaceholderExpansion extends PlaceholderExpansion {
         // Player rank
         if (params.equalsIgnoreCase("rank")) {
             if (player == null) return "N/A";
+            if (cache != null) {
+                Integer rank = cache.getPlayerRank(player.getUniqueId());
+                return rank != null ? String.valueOf(rank) : "N/A";
+            }
             return String.valueOf(stats.getPlayerRank(player.getUniqueId()));
         }
         
         // Milestones
         if (params.equalsIgnoreCase("next_milestone")) {
             if (player == null) return "0";
-            int rolls = stats.getPlayerRolls(player.getUniqueId());
+            int rolls = (cache != null) ? cache.getPlayerRolls(player.getUniqueId()) : stats.getPlayerRolls(player.getUniqueId());
             int[] milestones = {10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000};
             for (int milestone : milestones) {
                 if (rolls < milestone) {
@@ -109,7 +125,7 @@ public class BubbleRunePlaceholderExpansion extends PlaceholderExpansion {
         
         if (params.equalsIgnoreCase("milestone_progress")) {
             if (player == null) return "0";
-            int rolls = stats.getPlayerRolls(player.getUniqueId());
+            int rolls = (cache != null) ? cache.getPlayerRolls(player.getUniqueId()) : stats.getPlayerRolls(player.getUniqueId());
             int[] milestones = {10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000};
             for (int milestone : milestones) {
                 if (rolls < milestone) {
@@ -121,7 +137,7 @@ public class BubbleRunePlaceholderExpansion extends PlaceholderExpansion {
         
         if (params.equalsIgnoreCase("milestone_percent")) {
             if (player == null) return "0";
-            int rolls = stats.getPlayerRolls(player.getUniqueId());
+            int rolls = (cache != null) ? cache.getPlayerRolls(player.getUniqueId()) : stats.getPlayerRolls(player.getUniqueId());
             int[] milestones = {10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000};
             for (int milestone : milestones) {
                 if (rolls < milestone) {
@@ -173,6 +189,7 @@ public class BubbleRunePlaceholderExpansion extends PlaceholderExpansion {
             String tierName = params.substring(12).toUpperCase();
             try {
                 RuneTier tier = RuneTier.valueOf(tierName);
+                if (cache != null) return String.valueOf(cache.getPlayerTierRolls(player.getUniqueId(), tier));
                 return String.valueOf(stats.getPlayerTierCount(player.getUniqueId(), tier));
             } catch (IllegalArgumentException e) {
                 return "0";
@@ -182,12 +199,14 @@ public class BubbleRunePlaceholderExpansion extends PlaceholderExpansion {
         // Rarest rune obtained
         if (params.equalsIgnoreCase("rarest_rune")) {
             if (player == null) return "None";
+            if (cache != null) return cache.getRarestRuneObtained(player.getUniqueId());
             return stats.getRarestRuneObtained(player.getUniqueId());
         }
         
         // Total XP spent on runes
         if (params.equalsIgnoreCase("total_xp_spent")) {
             if (player == null) return "0";
+            if (cache != null) return String.valueOf(cache.getPlayerTotalXpSpent(player.getUniqueId()));
             return String.valueOf(stats.getTotalXpSpent(player.getUniqueId()));
         }
         

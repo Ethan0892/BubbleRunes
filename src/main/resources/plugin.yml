@@ -1,6 +1,6 @@
 name: BubbleRune
 main: com.bubblecraft.bubblerune.BubbleRunePlugin
-version: 1.0.0
+version: 1.0.3
 api-version: "1.21"
 author: BubbleCraft
 website: ""
@@ -13,12 +13,15 @@ softdepend:
 commands:
   bubblerune:
     description: BubbleRune admin command
-    usage: "/bubblerune <reload|settable|gui|giverune|testroll|quests>"
+    usage: "/bubblerune <reload|settable|gui|giverune|testroll|quests|debug>"
     permission: bubblerune.admin
 
 permissions:
   bubblerune.admin:
     description: "Allows managing BubbleRune."
+    default: op
+  bubblerune.debug:
+    description: "Allows toggling BubbleRune debug logging."
     default: op
   bubblerune.gui:
     description: "Allows opening the rune GUI from anywhere."

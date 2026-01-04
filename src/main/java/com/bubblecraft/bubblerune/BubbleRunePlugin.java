@@ -20,8 +20,12 @@ public class BubbleRunePlugin extends JavaPlugin {
     private WeeklyQuestManager questManager;
     private QuestTrackingListener questListener;
     private FileConfiguration runesConfig;
+    private FileConfiguration messagesConfig;
     private RuneTableGUI runeTableGUI;
     private DatabaseManager databaseManager;
+    private PlaceholderStatsCache placeholderStatsCache;
+    private org.bukkit.scheduler.BukkitTask placeholderRefreshTask;
+    private boolean debugEnabled;
 
     @Override
     public void onEnable() {
@@ -30,6 +34,7 @@ public class BubbleRunePlugin extends JavaPlugin {
         try {
             saveDefaultConfig();
             loadRunesConfig();
+            loadMessagesConfig();
             reloadConfigValues();
         } catch (Exception e) {
             getLogger().severe("Failed to load configuration: " + e.getMessage());
@@ -42,6 +47,8 @@ public class BubbleRunePlugin extends JavaPlugin {
             // Initialize database
             databaseManager = new DatabaseManager(this);
             databaseManager.initialize();
+
+            placeholderStatsCache = new PlaceholderStatsCache(this);
             
             runeService = new RuneService(this);
             cooldownManager = new CooldownManager(getConfig().getInt("cooldown.seconds", 60));
@@ -60,6 +67,7 @@ public class BubbleRunePlugin extends JavaPlugin {
             Bukkit.getPluginManager().registerEvents(new RuneGUIListener(this, runeService), this);
             Bukkit.getPluginManager().registerEvents(new RuneItemListener(this, runeService), this);
             Bukkit.getPluginManager().registerEvents(new RuneCombineListener(this, runeService), this);
+            Bukkit.getPluginManager().registerEvents(new RuneCraftingCombineListener(this, runeService), this);
         } catch (Exception e) {
             getLogger().severe("Failed to initialize plugin components: " + e.getMessage());
             e.printStackTrace();
@@ -81,12 +89,30 @@ public class BubbleRunePlugin extends JavaPlugin {
         // Register PlaceholderAPI expansion if available
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
             try {
-                new BubbleRunePlaceholderExpansion(this);
-                getLogger().info("PlaceholderAPI expansion registered!");
+                boolean registeredAny = false;
+
+                // Register both identifiers for user friendliness / backwards compatibility.
+                BubbleRunePlaceholderExpansion singular = new BubbleRunePlaceholderExpansion(this, "bubblerune");
+                registeredAny |= singular.register();
+
+                BubbleRunePlaceholderExpansion plural = new BubbleRunePlaceholderExpansion(this, "bubblerunes");
+                registeredAny |= plural.register();
+
+                if (registeredAny) {
+                    getLogger().info("PlaceholderAPI expansion registered!");
+                } else {
+                    getLogger().warning("PlaceholderAPI expansion was not registered (may already be registered or not supported).");
+                }
             } catch (Exception e) {
                 getLogger().warning("Failed to register PlaceholderAPI expansion: " + e.getMessage());
+            } catch (NoClassDefFoundError e) {
+                // PlaceholderAPI present but classes not loadable (shaded/classloader edge case)
+                getLogger().warning("Failed to register PlaceholderAPI expansion (missing classes): " + e.getMessage());
             }
         }
+
+        // Start placeholder refresh task (used by PlaceholderAPI expansions)
+        restartPlaceholderRefreshTask();
         
         // Start periodic cleanup tasks
         startCleanupTasks();
@@ -109,6 +135,10 @@ public class BubbleRunePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (placeholderRefreshTask != null) {
+            placeholderRefreshTask.cancel();
+            placeholderRefreshTask = null;
+        }
         if (databaseManager != null) {
             databaseManager.close();
         }
@@ -122,6 +152,8 @@ public class BubbleRunePlugin extends JavaPlugin {
     public void reloadConfigValues() {
         FileConfiguration cfg = getConfig();
         runeTableLocations.clear();
+
+        debugEnabled = cfg.getBoolean("debug", false);
 
         // Support multiple tables
         ConfigurationSection tablesSection = cfg.getConfigurationSection("runeTables");
@@ -156,6 +188,59 @@ public class BubbleRunePlugin extends JavaPlugin {
         if (cooldownManager != null) {
             cooldownManager.setCooldownSeconds(cfg.getInt("cooldown.seconds", 60));
         }
+
+        restartPlaceholderRefreshTask();
+    }
+
+    public boolean isDebugEnabled() {
+        return debugEnabled;
+    }
+
+    /**
+     * Updates the debug flag in-memory and in config.yml.
+     * Callers should use this rather than setting config directly.
+     */
+    public void setDebugEnabled(boolean enabled) {
+        debugEnabled = enabled;
+        getConfig().set("debug", enabled);
+        saveConfig();
+    }
+
+    public PlaceholderStatsCache getPlaceholderStatsCache() {
+        return placeholderStatsCache;
+    }
+
+    private void restartPlaceholderRefreshTask() {
+        if (!isEnabled()) return;
+        if (placeholderStatsCache == null) return;
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") == null) return;
+
+        if (placeholderRefreshTask != null) {
+            placeholderRefreshTask.cancel();
+            placeholderRefreshTask = null;
+        }
+
+        long refreshSeconds = getConfig().getLong("placeholders.refreshSeconds", 300L);
+        if (refreshSeconds < 5L) refreshSeconds = 5L;
+        long refreshTicks = refreshSeconds * 20L;
+
+        // Prime cache immediately.
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                placeholderStatsCache.refresh();
+            } catch (Exception e) {
+                getLogger().warning("Placeholder refresh priming error: " + e.getMessage());
+            }
+        });
+
+        // Initial refresh quickly, then every interval.
+        placeholderRefreshTask = Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
+            try {
+                placeholderStatsCache.refresh();
+            } catch (Exception e) {
+                getLogger().warning("Placeholder refresh task error: " + e.getMessage());
+            }
+        }, 20L, refreshTicks);
     }
 
     public List<Location> getRuneTableLocations() {
@@ -190,6 +275,20 @@ public class BubbleRunePlugin extends JavaPlugin {
     public FileConfiguration getRunesConfig() {
         return runesConfig;
     }
+
+    public FileConfiguration getMessagesConfig() {
+        return messagesConfig;
+    }
+
+    /**
+     * Reads a message from messages.yml first, then falls back to config.yml.
+     */
+    public String getMessage(String path, String defaultValue) {
+        if (messagesConfig != null && messagesConfig.contains(path)) {
+            return messagesConfig.getString(path, defaultValue);
+        }
+        return getConfig().getString(path, defaultValue);
+    }
     
     public RuneTableGUI getRuneTableGUI() {
         return runeTableGUI;
@@ -213,6 +312,23 @@ public class BubbleRunePlugin extends JavaPlugin {
         if (runesFile.exists()) {
             runesConfig = YamlConfiguration.loadConfiguration(runesFile);
             getLogger().info("Reloaded runes.yml configuration");
+        }
+    }
+
+    private void loadMessagesConfig() {
+        File messagesFile = new File(getDataFolder(), "messages.yml");
+        if (!messagesFile.exists()) {
+            saveResource("messages.yml", false);
+        }
+        messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
+        getLogger().info("Loaded messages.yml configuration");
+    }
+
+    public void reloadMessagesConfig() {
+        File messagesFile = new File(getDataFolder(), "messages.yml");
+        if (messagesFile.exists()) {
+            messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
+            getLogger().info("Reloaded messages.yml configuration");
         }
     }
 }

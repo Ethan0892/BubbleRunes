@@ -36,7 +36,7 @@ tiers:
       - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀ</gray>"
       - "<!italic><white><bold>ᴄᴏᴍᴍᴏɴ</bold></white> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
       - ""
-      - "<!italic><gradient:#AAAAAA:#FFFFFF>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><gradient:#AAAAAA:#FFFFFF>Combine 2 in an anvil to upgrade!</gradient>"
       - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
   
   uncommon:
@@ -46,7 +46,7 @@ tiers:
       - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀɴ</gray>"
       - "<!italic><green><bold>ᴜɴᴄᴏᴍᴍᴏɴ</bold></green> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
       - ""
-      - "<!italic><gradient:#55FF55:#00AA00>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><gradient:#55FF55:#00AA00>Combine 2 in an anvil to upgrade!</gradient>"
       - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
   
   rare:
@@ -56,7 +56,7 @@ tiers:
       - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀ</gray>"
       - "<!italic><blue><bold>ʀᴀʀᴇ</bold></blue> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
       - ""
-      - "<!italic><gradient:#5555FF:#00AAFF>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><gradient:#5555FF:#00AAFF>Combine 2 in an anvil to upgrade!</gradient>"
       - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
   
   epic:
@@ -66,7 +66,7 @@ tiers:
       - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀɴ</gray>"
       - "<!italic><red><bold>ᴇᴘɪᴄ</bold></red> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
       - ""
-      - "<!italic><gradient:#FF5555:#AA0000>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><gradient:#FF5555:#AA0000>Combine 2 in an anvil to upgrade!</gradient>"
       - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
   
   legendary:
@@ -76,7 +76,7 @@ tiers:
       - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀ</gray>"
       - "<!italic><gold><bold>ʟᴇɢᴇɴᴅᴀʀʏ</bold></gold> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
       - ""
-      - "<!italic><gradient:#FFAA00:#FFFF55>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><gradient:#FFAA00:#FFFF55>Combine 2 in an anvil to upgrade!</gradient>"
       - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
   
   special:
@@ -86,7 +86,7 @@ tiers:
       - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀ</gray>"
       - "<!italic><aqua><bold>ꜱᴘᴇᴄɪᴀʟ</bold></aqua> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
       - ""
-      - "<!italic><gradient:#55FFFF:#00AAAA>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><gradient:#55FFFF:#00AAAA>Combine 2 in an anvil to upgrade!</gradient>"
       - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
   
   veryspecial:
@@ -96,7 +96,7 @@ tiers:
       - "<!italic><gray>ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇᴠᴇᴀʟ ᴀ</gray>"
       - "<!italic><light_purple><bold>ᴠᴇʀʏ ꜱᴘᴇᴄɪᴀʟ</bold></light_purple> <gray>ᴇɴᴄʜᴀɴᴛᴍᴇɴᴛ!</gray>"
       - ""
-      - "<!italic><gradient:#9557FB:#A81DEF>Combine 3 in an anvil to upgrade!</gradient>"
+      - "<!italic><gradient:#9557FB:#A81DEF>Combine 2 in an anvil to upgrade!</gradient>"
       - "<!italic><dark_gray>ID: %enchant%</dark_gray>"
 
 # Preview rune settings (when runePreview.enabled is true in config.yml)

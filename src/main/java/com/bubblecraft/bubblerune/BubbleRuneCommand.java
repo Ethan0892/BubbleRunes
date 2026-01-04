@@ -23,42 +23,94 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 0) {
-            sender.sendMessage(ChatColor.YELLOW + "BubbleRune v" + plugin.getDescription().getVersion());
-            sender.sendMessage(ChatColor.YELLOW + "Commands:");
-            sender.sendMessage(ChatColor.GRAY + "  /" + label + " reload - Reload configuration");
-            sender.sendMessage(ChatColor.GRAY + "  /" + label + " settable [name] - Set rune table location");
-            sender.sendMessage(ChatColor.GRAY + "  /" + label + " gui - Open rune GUI");
-            sender.sendMessage(ChatColor.GRAY + "  /" + label + " giverune <player> <tier> - Give a rune");
-            sender.sendMessage(ChatColor.GRAY + "  /" + label + " testroll - Test tier rolling");
-            sender.sendMessage(ChatColor.GRAY + "  /" + label + " quests - View weekly quests");
-            sender.sendMessage(ChatColor.GRAY + "  /" + label + " stats - View your statistics");
-            sender.sendMessage(ChatColor.GRAY + "  /" + label + " history [limit] - View roll history");
-            sender.sendMessage(ChatColor.GRAY + "  /" + label + " leaderboard [limit] - View top rollers");
+            String help = plugin.getMessage(
+                "command.help",
+                "&eBubbleRune v%version%\n" +
+                "&eCommands:\n" +
+                "&7  /%label% reload - Reload configuration\n" +
+                "&7  /%label% settable [name] - Set rune table location\n" +
+                "&7  /%label% gui - Open rune GUI\n" +
+                "&7  /%label% giverune <player> <tier> - Give a rune\n" +
+                "&7  /%label% testroll - Test tier rolling\n" +
+                "&7  /%label% quests - View weekly quests\n" +
+                "&7  /%label% debug [on|off|toggle] - Toggle debug logging\n" +
+                "&7  /%label% stats - View your statistics\n" +
+                "&7  /%label% history [limit] - View roll history\n" +
+                "&7  /%label% leaderboard [limit] - View top rollers");
+            help = help
+                .replace("%version%", plugin.getDescription().getVersion())
+                .replace("%label%", label);
+            for (String line : help.split("\\n")) {
+                sender.sendMessage(TextFormatter.format(line));
+            }
             return true;
         }
 
         if (args[0].equalsIgnoreCase("reload")) {
             if (!sender.hasPermission("bubblerune.admin")) {
-                sender.sendMessage(ChatColor.RED + "No permission.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.noPermission",
+                    "&cNo permission.")));
                 return true;
             }
             plugin.reloadConfig();
             plugin.reloadRunesConfig();
+            plugin.reloadMessagesConfig();
             plugin.reloadConfigValues();
             if (plugin.getRuneService() != null) {
                 plugin.getRuneService().reload();
             }
-            sender.sendMessage(ChatColor.GREEN + "BubbleRune config and runes.yml reloaded.");
+            sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                "command.reloadSuccess",
+                "&aBubbleRune config, runes.yml, and messages.yml reloaded.")));
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("debug")) {
+            if (!sender.hasPermission("bubblerune.admin") && !sender.hasPermission("bubblerune.debug")) {
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.noPermission",
+                    "&cNo permission.")));
+                return true;
+            }
+
+            boolean newValue;
+            if (args.length < 2 || args[1].equalsIgnoreCase("toggle")) {
+                newValue = !plugin.isDebugEnabled();
+            } else if (args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("true") || args[1].equalsIgnoreCase("enable")) {
+                newValue = true;
+            } else if (args[1].equalsIgnoreCase("off") || args[1].equalsIgnoreCase("false") || args[1].equalsIgnoreCase("disable")) {
+                newValue = false;
+            } else {
+                String usage = plugin.getMessage(
+                    "command.debugUsage",
+                    "&cUsage: /%label% debug [on|off|toggle]"
+                );
+                sender.sendMessage(TextFormatter.format(usage.replace("%label%", label)));
+                return true;
+            }
+
+            plugin.setDebugEnabled(newValue);
+
+            String msg = plugin.getMessage(
+                "command.debugStatus",
+                "&aBubbleRune debug is now: &f%value%"
+            );
+            sender.sendMessage(TextFormatter.format(msg.replace("%value%", String.valueOf(newValue))));
             return true;
         }
 
         if (args[0].equalsIgnoreCase("settable")) {
             if (!(sender instanceof Player)) {
-                sender.sendMessage("Only players can use this.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.onlyPlayers",
+                    "&cOnly players can use this.")));
                 return true;
             }
             if (!sender.hasPermission("bubblerune.admin")) {
-                sender.sendMessage(ChatColor.RED + "No permission.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.noPermission",
+                    "&cNo permission.")));
                 return true;
             }
             Player player = (Player) sender;
@@ -74,23 +126,32 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
             plugin.getConfig().set("runeTables." + tableName + ".z", loc.getBlockZ());
             plugin.saveConfig();
             plugin.reloadConfigValues();
-            sender.sendMessage(ChatColor.GREEN + "Rune table '" + tableName + "' location set at your position.");
+            String setMsg = plugin.getMessage(
+                "command.tableSet",
+                "&aRune table '&f%name%&a' location set at your position.");
+            sender.sendMessage(TextFormatter.format(setMsg.replace("%name%", tableName)));
             return true;
         }
 
         if (args[0].equalsIgnoreCase("gui")) {
             if (!(sender instanceof Player)) {
-                sender.sendMessage("Only players can use this.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.onlyPlayers",
+                    "&cOnly players can use this.")));
                 return true;
             }
             if (!sender.hasPermission("bubblerune.gui")) {
-                sender.sendMessage(ChatColor.RED + "No permission.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.noPermission",
+                    "&cNo permission.")));
                 return true;
             }
             Player player = (Player) sender;
             
             if (!plugin.getConfig().getBoolean("gui.enabled", true)) {
-                sender.sendMessage(ChatColor.RED + "Rune GUI is disabled.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.guiDisabled",
+                    "&cRune GUI is disabled.")));
                 return true;
             }
             
@@ -101,18 +162,25 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
 
         if (args[0].equalsIgnoreCase("giverune")) {
             if (!sender.hasPermission("bubblerune.admin")) {
-                sender.sendMessage(ChatColor.RED + "No permission.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.noPermission",
+                    "&cNo permission.")));
                 return true;
             }
 
             if (args.length < 3) {
-                sender.sendMessage(ChatColor.RED + "Usage: /" + label + " giverune <player> <tier>");
+                String usage = plugin.getMessage(
+                    "command.giveruneUsage",
+                    "&cUsage: /%label% giverune <player> <tier>");
+                sender.sendMessage(TextFormatter.format(usage.replace("%label%", label)));
                 return true;
             }
 
             Player target = plugin.getServer().getPlayer(args[1]);
             if (target == null) {
-                sender.sendMessage(ChatColor.RED + "Player not found.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.playerNotFound",
+                    "&cPlayer not found.")));
                 return true;
             }
 
@@ -120,31 +188,45 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
             try {
                 tier = RuneTier.valueOf(args[2].toUpperCase());
             } catch (IllegalArgumentException ex) {
-                sender.sendMessage(ChatColor.RED + "Invalid tier. Use: COMMON, UNCOMMON, RARE, LEGENDARY.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.invalidTier",
+                    "&cInvalid tier.")));
                 return true;
             }
 
             // Directly create a rune item of the requested tier, ignoring XP cost.
             RuneService runeService = plugin.getRuneService();
             target.getInventory().addItem(runeService.createRuneItem(tier));
-            sender.sendMessage(ChatColor.GREEN + "Gave a " + tier.name().toLowerCase() + " rune to " + target.getName() + ".");
+            String gave = plugin.getMessage(
+                "command.gaveRune",
+                "&aGave a &f%tier% &arune to &f%player%&a.");
+            sender.sendMessage(TextFormatter.format(
+                gave.replace("%tier%", tier.name().toLowerCase()).replace("%player%", target.getName())
+            ));
             return true;
         }
 
         if (args[0].equalsIgnoreCase("testroll")) {
             if (!sender.hasPermission("bubblerune.admin")) {
-                sender.sendMessage(ChatColor.RED + "No permission.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.noPermission",
+                    "&cNo permission.")));
                 return true;
             }
 
             RuneTier tier = plugin.getRuneService().rollTier();
-            sender.sendMessage(ChatColor.YELLOW + "Rolled tier: " + tier.name());
+            String rolled = plugin.getMessage(
+                "command.testrollResult",
+                "&eRolled tier: &f%tier%");
+            sender.sendMessage(TextFormatter.format(rolled.replace("%tier%", tier.name())));
             return true;
         }
 
         if (args[0].equalsIgnoreCase("quests")) {
             if (!(sender instanceof Player)) {
-                sender.sendMessage("Only players can use this.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.onlyPlayers",
+                    "&cOnly players can use this.")));
                 return true;
             }
             
@@ -152,13 +234,20 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
             WeeklyQuestManager questManager = plugin.getQuestManager();
             
             if (questManager == null || !plugin.getConfig().getBoolean("weeklyQuests.enabled", true)) {
-                sender.sendMessage(ChatColor.RED + "Weekly quests are not enabled.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.weeklyQuestsDisabled",
+                    "&cWeekly quests are not enabled.")));
                 return true;
             }
-            
-            sender.sendMessage(TextFormatter.format("&6&l━━━━━━ Weekly Quests ━━━━━━"));
-            sender.sendMessage(TextFormatter.format("&7Resets in: &e" + questManager.getFormattedTimeUntilReset()));
-            sender.sendMessage("");
+
+            sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                "command.weeklyQuestsHeader",
+                "&6&l━━━━━━ Weekly Quests ━━━━━━")));
+            String resets = plugin.getMessage(
+                "command.weeklyQuestsResetsIn",
+                "&7Resets in: &e%time%");
+            sender.sendMessage(TextFormatter.format(resets.replace("%time%", questManager.getFormattedTimeUntilReset())));
+            sender.sendMessage(TextFormatter.format(plugin.getMessage("command.blankLine", "")));
             
             for (String questId : questManager.getAllQuestIds()) {
                 org.bukkit.configuration.ConfigurationSection quest = plugin.getConfig().getConfigurationSection("weeklyQuests.quests." + questId);
@@ -172,14 +261,35 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
                 String rewardTier = quest.getString("reward.tier", "RARE");
                 
                 if (completed) {
-                    sender.sendMessage(TextFormatter.format("&a✔ &f" + name + " &7- &aCompleted!"));
+                    String line = plugin.getMessage(
+                        "command.weeklyQuestCompletedLine",
+                        "&a✔ &f%name% &7- &aCompleted!");
+                    sender.sendMessage(TextFormatter.format(line.replace("%name%", name)));
                 } else {
-                    sender.sendMessage(TextFormatter.format("&7▪ &f" + name));
-                    sender.sendMessage(TextFormatter.format("  &8" + description));
-                    sender.sendMessage(TextFormatter.format("  &7Progress: &e" + current + "&7/&e" + required));
-                    sender.sendMessage(TextFormatter.format("  &7Reward: &f" + rewardTier + " &7Rune"));
+                    String line1 = plugin.getMessage(
+                        "command.weeklyQuestLine",
+                        "&7▪ &f%name%");
+                    sender.sendMessage(TextFormatter.format(line1.replace("%name%", name)));
+
+                    String line2 = plugin.getMessage(
+                        "command.weeklyQuestDescriptionLine",
+                        "  &8%description%");
+                    sender.sendMessage(TextFormatter.format(line2.replace("%description%", description)));
+
+                    String line3 = plugin.getMessage(
+                        "command.weeklyQuestProgressLine",
+                        "  &7Progress: &e%current%&7/&e%required%");
+                    sender.sendMessage(TextFormatter.format(line3
+                        .replace("%current%", String.valueOf(current))
+                        .replace("%required%", String.valueOf(required))
+                    ));
+
+                    String line4 = plugin.getMessage(
+                        "command.weeklyQuestRewardLine",
+                        "  &7Reward: &f%rewardTier% &7Rune");
+                    sender.sendMessage(TextFormatter.format(line4.replace("%rewardTier%", rewardTier)));
                 }
-                sender.sendMessage("");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage("command.blankLine", "")));
             }
             
             return true;
@@ -187,14 +297,18 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
 
         if (args[0].equalsIgnoreCase("stats")) {
             if (!(sender instanceof Player)) {
-                sender.sendMessage("Only players can use this.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.onlyPlayers",
+                    "&cOnly players can use this.")));
                 return true;
             }
             
             Player player = (Player) sender;
             
             if (plugin.getDatabaseManager() == null) {
-                sender.sendMessage(ChatColor.RED + "Database not available.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.databaseNotAvailable",
+                    "&cDatabase not available.")));
                 return true;
             }
             
@@ -205,28 +319,82 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
                     
                     org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
                         if (stats == null) {
-                            sender.sendMessage(TextFormatter.format("&cYou haven't rolled any runes yet!"));
+                            sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                                "command.noRollsYet",
+                                "&cYou haven't rolled any runes yet!")));
                             return;
                         }
-                        
-                        sender.sendMessage(TextFormatter.format("&6&l━━━━━━ Your Rune Statistics ━━━━━━"));
-                        sender.sendMessage(TextFormatter.format("&7Total Rolls: &e" + stats.totalRolls));
-                        sender.sendMessage(TextFormatter.format("&7Total XP Spent: &e" + stats.totalXpSpent));
-                        sender.sendMessage(TextFormatter.format("&7Total Coins Spent: &e" + stats.totalCoinsSpent));
-                        sender.sendMessage("");
-                        sender.sendMessage(TextFormatter.format("&7Tier Breakdown:"));
-                        sender.sendMessage(TextFormatter.format("  &fCommon: &7" + stats.commonRolls));
-                        sender.sendMessage(TextFormatter.format("  &aUncommon: &7" + stats.uncommonRolls));
-                        sender.sendMessage(TextFormatter.format("  &9Rare: &7" + stats.rareRolls));
-                        sender.sendMessage(TextFormatter.format("  &5Epic: &7" + stats.epicRolls));
-                        sender.sendMessage(TextFormatter.format("  &6Legendary: &7" + stats.legendaryRolls));
-                        sender.sendMessage(TextFormatter.format("  &bSpecial: &7" + stats.specialRolls));
-                        sender.sendMessage(TextFormatter.format("  &dVery Special: &7" + stats.verySpecialRolls));
-                        sender.sendMessage(TextFormatter.format("&6&l━━━━━━━━━━━━━━━━━━━━━━━━━━"));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsHeader",
+                            "&6&l━━━━━━ Your Rune Statistics ━━━━━━")));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTotalRolls",
+                            "&7Total Rolls: &e%value%"
+                        ).replace("%value%", String.valueOf(stats.totalRolls))));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTotalXpSpent",
+                            "&7Total XP Spent: &e%value%"
+                        ).replace("%value%", String.valueOf(stats.totalXpSpent))));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTotalCoinsSpent",
+                            "&7Total Coins Spent: &e%value%"
+                        ).replace("%value%", String.valueOf(stats.totalCoinsSpent))));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage("command.blankLine", "")));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTierBreakdownHeader",
+                            "&7Tier Breakdown:")));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTierCommon",
+                            "  &fCommon: &7%value%"
+                        ).replace("%value%", String.valueOf(stats.commonRolls))));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTierUncommon",
+                            "  &aUncommon: &7%value%"
+                        ).replace("%value%", String.valueOf(stats.uncommonRolls))));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTierRare",
+                            "  &9Rare: &7%value%"
+                        ).replace("%value%", String.valueOf(stats.rareRolls))));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTierEpic",
+                            "  &5Epic: &7%value%"
+                        ).replace("%value%", String.valueOf(stats.epicRolls))));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTierLegendary",
+                            "  &6Legendary: &7%value%"
+                        ).replace("%value%", String.valueOf(stats.legendaryRolls))));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTierSpecial",
+                            "  &bSpecial: &7%value%"
+                        ).replace("%value%", String.valueOf(stats.specialRolls))));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.statsTierVerySpecial",
+                            "  &dVery Special: &7%value%"
+                        ).replace("%value%", String.valueOf(stats.verySpecialRolls))));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.sectionFooter",
+                            "&6&l━━━━━━━━━━━━━━━━━━━━━━━━━━")));
                     });
                 } catch (Exception e) {
                     org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
-                        sender.sendMessage(TextFormatter.format("&cError loading stats: " + e.getMessage()));
+                        String err = plugin.getMessage(
+                            "command.errorLoadingStats",
+                            "&cError loading stats: %error%");
+                        sender.sendMessage(TextFormatter.format(err.replace("%error%", e.getMessage())));
                     });
                 }
             });
@@ -236,14 +404,18 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
 
         if (args[0].equalsIgnoreCase("history")) {
             if (!(sender instanceof Player)) {
-                sender.sendMessage("Only players can use this.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.onlyPlayers",
+                    "&cOnly players can use this.")));
                 return true;
             }
             
             Player player = (Player) sender;
             
             if (plugin.getDatabaseManager() == null) {
-                sender.sendMessage(ChatColor.RED + "Database not available.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.databaseNotAvailable",
+                    "&cDatabase not available.")));
                 return true;
             }
             
@@ -254,7 +426,9 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
                     if (limit <= 0) limit = 10;
                     if (limit > 50) limit = 50;
                 } catch (NumberFormatException e) {
-                    sender.sendMessage(ChatColor.RED + "Invalid number. Using default limit of 10.");
+                    sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                        "command.invalidNumberUsingDefaultLimit",
+                        "&cInvalid number. Using default limit of 10.")));
                 }
             }
             
@@ -267,11 +441,16 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
                     
                     org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
                         if (rolls.isEmpty()) {
-                            sender.sendMessage(TextFormatter.format("&cYou haven't rolled any runes yet!"));
+                            sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                                "command.noRollsYet",
+                                "&cYou haven't rolled any runes yet!")));
                             return;
                         }
-                        
-                        sender.sendMessage(TextFormatter.format("&6&l━━━━━━ Recent Rolls (" + rolls.size() + ") ━━━━━━"));
+
+                        String header = plugin.getMessage(
+                            "command.historyHeader",
+                            "&6&l━━━━━━ Recent Rolls (%count%) ━━━━━━");
+                        sender.sendMessage(TextFormatter.format(header.replace("%count%", String.valueOf(rolls.size()))));
                         
                         for (DatabaseManager.RollRecord roll : rolls) {
                             String tierColor = getTierColor(roll.tier);
@@ -283,12 +462,17 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
                                 " &7(" + roll.xpCost + " XP, " + roll.coinCost + " coins) - &8" + timeStr
                             ));
                         }
-                        
-                        sender.sendMessage(TextFormatter.format("&6&l━━━━━━━━━━━━━━━━━━━━━━━━━━"));
+
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.sectionFooter",
+                            "&6&l━━━━━━━━━━━━━━━━━━━━━━━━━━")));
                     });
                 } catch (Exception e) {
                     org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
-                        sender.sendMessage(TextFormatter.format("&cError loading history: " + e.getMessage()));
+                        String err = plugin.getMessage(
+                            "command.errorLoadingHistory",
+                            "&cError loading history: %error%");
+                        sender.sendMessage(TextFormatter.format(err.replace("%error%", e.getMessage())));
                     });
                 }
             });
@@ -298,12 +482,16 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
 
         if (args[0].equalsIgnoreCase("leaderboard") || args[0].equalsIgnoreCase("top")) {
             if (!sender.hasPermission("bubblerune.leaderboard")) {
-                sender.sendMessage(ChatColor.RED + "No permission.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.noPermission",
+                    "&cNo permission.")));
                 return true;
             }
             
             if (plugin.getDatabaseManager() == null) {
-                sender.sendMessage(ChatColor.RED + "Database not available.");
+                sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                    "command.databaseNotAvailable",
+                    "&cDatabase not available.")));
                 return true;
             }
             
@@ -314,7 +502,9 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
                     if (limit <= 0) limit = 10;
                     if (limit > 25) limit = 25;
                 } catch (NumberFormatException e) {
-                    sender.sendMessage(ChatColor.RED + "Invalid number. Using default limit of 10.");
+                    sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                        "command.invalidNumberUsingDefaultLimit",
+                        "&cInvalid number. Using default limit of 10.")));
                 }
             }
             
@@ -326,7 +516,9 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
                     List<DatabaseManager.PlayerStats> topPlayers = plugin.getDatabaseManager().getTopPlayers(finalLimit);
                     
                     org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
-                        sender.sendMessage(TextFormatter.format("&6&l━━━━━━ Top Rune Rollers ━━━━━━"));
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.leaderboardHeader",
+                            "&6&l━━━━━━ Top Rune Rollers ━━━━━━")));
                         
                         int rank = 1;
                         for (DatabaseManager.PlayerStats stats : topPlayers) {
@@ -338,11 +530,16 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
                             rank++;
                         }
                         
-                        sender.sendMessage(TextFormatter.format("&6&l━━━━━━━━━━━━━━━━━━━━━━━━━━"));
+                        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+                            "command.sectionFooter",
+                            "&6&l━━━━━━━━━━━━━━━━━━━━━━━━━━")));
                     });
                 } catch (Exception e) {
                     org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
-                        sender.sendMessage(TextFormatter.format("&cError loading leaderboard: " + e.getMessage()));
+                        String err = plugin.getMessage(
+                            "command.errorLoadingLeaderboard",
+                            "&cError loading leaderboard: %error%");
+                        sender.sendMessage(TextFormatter.format(err.replace("%error%", e.getMessage())));
                     });
                 }
             });
@@ -350,7 +547,9 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        sender.sendMessage(ChatColor.RED + "Unknown subcommand.");
+        sender.sendMessage(TextFormatter.format(plugin.getMessage(
+            "command.unknownSubcommand",
+            "&cUnknown subcommand.")));
         return true;
     }
     
@@ -387,9 +586,19 @@ public class BubbleRuneCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            List<String> options = Arrays.asList("reload", "settable", "gui", "giverune", "testroll", "quests", "stats", "history", "leaderboard", "top");
+            List<String> options = Arrays.asList("reload", "settable", "gui", "giverune", "testroll", "quests", "debug", "stats", "history", "leaderboard", "top");
             String current = args[0].toLowerCase();
             for (String opt : options) {
+                if (opt.startsWith(current)) {
+                    completions.add(opt);
+                }
+            }
+            return completions;
+        }
+
+        if (args.length == 2 && args[0].equalsIgnoreCase("debug")) {
+            String current = args[1].toLowerCase();
+            for (String opt : Arrays.asList("on", "off", "toggle")) {
                 if (opt.startsWith(current)) {
                     completions.add(opt);
                 }

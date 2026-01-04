@@ -6,6 +6,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
+import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
@@ -22,6 +23,7 @@ public class RuneItemListener implements Listener {
     private final BubbleRunePlugin plugin;
     private final RuneService runeService;
     private final Random random = new Random();
+    private boolean ecoEnchantsPresent;
 
     public RuneItemListener(BubbleRunePlugin plugin, RuneService runeService) {
         this.plugin = plugin;
@@ -33,8 +35,10 @@ public class RuneItemListener implements Listener {
         try {
             Class.forName("com.willfp.ecoenchants.EcoEnchantsPlugin");
             plugin.getLogger().info("EcoEnchants detected - custom enchantments enabled.");
+            ecoEnchantsPresent = Bukkit.getPluginManager().getPlugin("EcoEnchants") != null;
         } catch (ClassNotFoundException e) {
             plugin.getLogger().info("EcoEnchants not found - using vanilla enchantments only.");
+            ecoEnchantsPresent = false;
         }
     }
 
@@ -60,25 +64,25 @@ public class RuneItemListener implements Listener {
             }
         }
 
-        ItemMeta meta = item.getItemMeta();
-        if (meta == null || !meta.hasDisplayName()) return;
+        // Only genuine rune items (PDC-marked) should trigger rune reveal logic.
+        if (!RuneItemData.isRune(item, plugin)) return;
 
-        String rawName = ChatColor.stripColor(meta.getDisplayName()).toLowerCase();
-        RuneTier tier = null;
-        for (RuneTier t : RuneTier.values()) {
-            if (rawName.contains(t.name().toLowerCase())) {
-                tier = t;
-                break;
-            }
+        RuneTier tier = RuneItemData.getTier(item, plugin);
+        if (tier == null) {
+            player.sendMessage(TextFormatter.format(plugin.getMessage(
+                "messages.runeItemMissingTierData",
+                "&cThis rune item is missing tier data. Please contact staff.")));
+            return;
         }
-        if (tier == null) return;
 
         event.setCancelled(true);
 
         // Determine a random enchant ID for this tier from config.
         String enchantId = runeService.getRandomEnchantIdForTier(tier);
         if (enchantId == null) {
-            player.sendMessage(ChatColor.RED + "No enchants configured for this rune tier.");
+            player.sendMessage(TextFormatter.format(plugin.getMessage(
+                "messages.noEnchantsConfiguredForTier",
+                "&cNo enchants configured for this rune tier.")));
             return;
         }
 
@@ -90,7 +94,10 @@ public class RuneItemListener implements Listener {
 
         ItemStack book = createEnchantedBook(enchantId, minLevel, maxLevel);
         if (book == null) {
-            player.sendMessage(ChatColor.RED + "Could not create enchanted book for: " + enchantId);
+            String template = plugin.getMessage(
+                "messages.couldNotCreateBookForEnchant",
+                "&cCould not create enchanted book for: %enchant%");
+            player.sendMessage(TextFormatter.format(template.replace("%enchant%", enchantId)));
             return;
         }
 
@@ -103,7 +110,7 @@ public class RuneItemListener implements Listener {
             player.getWorld().dropItemNaturally(player.getLocation(), it);
         }
 
-        String msg = plugin.getConfig().getString("messages.runeRevealed", "&aYour rune revealed a &f%enchant% &abook!");
+        String msg = plugin.getMessage("messages.runeRevealed", "&aYour rune revealed a &f%enchant% &abook!");
         msg = msg.replace("%enchant%", enchantId);
         player.sendMessage(TextFormatter.format(msg));
         
@@ -114,31 +121,66 @@ public class RuneItemListener implements Listener {
     }
 
     private ItemStack createEnchantedBook(String enchantId, int minLevel, int maxLevel) {
-        ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
-        EnchantmentStorageMeta bookMeta = (EnchantmentStorageMeta) book.getItemMeta();
-        if (bookMeta == null) return null;
+        try {
+            ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
+            EnchantmentStorageMeta bookMeta = (EnchantmentStorageMeta) book.getItemMeta();
+            if (bookMeta == null) return null;
 
-        Enchantment enchantment = findEnchantment(enchantId);
+            Enchantment enchantment = findEnchantment(enchantId);
+            if (enchantment == null) {
+                plugin.getLogger().warning("Enchantment not found: " + enchantId +
+                    " (EcoEnchants installed=" + ecoEnchantsPresent + ")");
 
-        if (enchantment == null) {
-            plugin.getLogger().warning("Enchantment not found: " + enchantId + 
-                " (make sure the ID matches exactly - check EcoEnchants config files for the correct ID)");
+                if (plugin.isDebugEnabled()) {
+                    String normalizedId = normalizeForMatch(enchantId);
+                    int matched = 0;
+                    StringBuilder sb = new StringBuilder();
+                    for (Enchantment ench : Registry.ENCHANTMENT) {
+                        String key = ench.getKey().getNamespace() + ":" + ench.getKey().getKey();
+                        String normalizedKey = normalizeForMatch(key);
+                        if (normalizedKey.contains(normalizedId) || normalizedId.contains(normalizedKey)) {
+                            if (matched++ == 0) sb.append("Possible matches: ");
+                            if (matched <= 10) {
+                                if (matched > 1) sb.append(", ");
+                                sb.append(key);
+                            }
+                        }
+                        if (matched >= 10) break;
+                    }
+                    if (sb.length() > 0) {
+                        plugin.getLogger().info("[Debug] Enchant lookup failed for '" + enchantId + "'. " + sb);
+                    } else {
+                        plugin.getLogger().info("[Debug] Enchant lookup failed for '" + enchantId + "'. No similar keys found in Registry.ENCHANTMENT.");
+                    }
+                }
+
+                return null;
+            }
+
+            int enchantMaxLevel = enchantment.getMaxLevel();
+
+            // Clamp level range to actual enchantment max
+            if (maxLevel > enchantMaxLevel) maxLevel = enchantMaxLevel;
+            if (minLevel > maxLevel) minLevel = maxLevel;
+            if (minLevel < 1) minLevel = 1;
+
+            int level = (minLevel == maxLevel) ? minLevel : minLevel + random.nextInt(maxLevel - minLevel + 1);
+
+            bookMeta.addStoredEnchant(enchantment, level, true);
+            book.setItemMeta(bookMeta);
+
+            if (plugin.isDebugEnabled()) {
+                plugin.getLogger().info("[Debug] Created enchanted book: id='" + enchantId + "' key='" + enchantment.getKey() + "' level=" + level);
+            }
+
+            return book;
+        } catch (Exception ex) {
+            plugin.getLogger().warning("Failed creating enchanted book for: " + enchantId + " (" + ex.getClass().getSimpleName() + ": " + ex.getMessage() + ")");
+            if (plugin.isDebugEnabled()) {
+                ex.printStackTrace();
+            }
             return null;
         }
-
-        int enchantMaxLevel = enchantment.getMaxLevel();
-
-        // Clamp level range to actual enchantment max
-        if (maxLevel > enchantMaxLevel) maxLevel = enchantMaxLevel;
-        if (minLevel > maxLevel) minLevel = maxLevel;
-        if (minLevel < 1) minLevel = 1;
-
-        int level = (minLevel == maxLevel) ? minLevel : minLevel + random.nextInt(maxLevel - minLevel + 1);
-
-        bookMeta.addStoredEnchant(enchantment, level, true);
-        book.setItemMeta(bookMeta);
-
-        return book;
     }
 
     /**
@@ -146,40 +188,56 @@ public class RuneItemListener implements Listener {
      * so we can look them up via NamespacedKey. Tries both minecraft: and ecoenchants: namespaces.
      */
     private Enchantment findEnchantment(String enchantId) {
-        String id = enchantId.toLowerCase().replace(" ", "_");
-        
-        // Try minecraft namespace first (vanilla enchants)
-        NamespacedKey vanillaKey = NamespacedKey.minecraft(id);
-        Enchantment enchantment = Registry.ENCHANTMENT.get(vanillaKey);
-        if (enchantment != null) {
-            return enchantment;
+        if (enchantId == null) return null;
+        String raw = enchantId.trim();
+        if (raw.isEmpty()) return null;
+
+        // If the config provides a namespaced key, try it directly first.
+        if (raw.contains(":")) {
+            NamespacedKey direct = NamespacedKey.fromString(raw.toLowerCase());
+            if (direct != null) {
+                Enchantment found = Registry.ENCHANTMENT.get(direct);
+                if (found != null) return found;
+            }
         }
 
-        // EcoEnchants uses minecraft namespace for custom enchants too
-        // Iterate through registry to find by key name
+        String id = raw.toLowerCase().replace(" ", "_");
+
+        // Try common namespaces.
+        Enchantment enchantment = Registry.ENCHANTMENT.get(NamespacedKey.minecraft(id));
+        if (enchantment != null) return enchantment;
+
+        try {
+            enchantment = Registry.ENCHANTMENT.get(new NamespacedKey("ecoenchants", id));
+            if (enchantment != null) return enchantment;
+        } catch (Exception ignored) {
+            // NamespacedKey constructor will only fail on invalid namespace.
+        }
+
+        // Normalize for forgiving matches: "block_breather" vs "blockbreather" / "block-breather".
+        String normalizedInput = normalizeForMatch(id);
+
         for (Enchantment ench : Registry.ENCHANTMENT) {
-            if (ench.getKey().getKey().equalsIgnoreCase(id)) {
-                return ench;
-            }
+            NamespacedKey key = ench.getKey();
+            String full = (key.getNamespace() + ":" + key.getKey()).toLowerCase();
+            String keyPart = key.getKey().toLowerCase();
+
+            if (keyPart.equalsIgnoreCase(id)) return ench;
+            if (full.equalsIgnoreCase(raw)) return ench;
+            if (normalizeForMatch(keyPart).equals(normalizedInput)) return ench;
+            if (normalizeForMatch(full).equals(normalizedInput)) return ench;
         }
 
         return null;
     }
+
+    private static String normalizeForMatch(String value) {
+        if (value == null) return "";
+        return value.toLowerCase().replaceAll("[^a-z0-9]", "");
+    }
     
     private void revealPreviewRune(Player player, ItemStack previewItem, String enchantId) {
-        // Extract tier from the preview rune
-        ItemMeta meta = previewItem.getItemMeta();
-        if (meta == null) return;
-        
-        RuneTier tier = null;
-        String rawName = ChatColor.stripColor(meta.getDisplayName()).toLowerCase();
-        for (RuneTier t : RuneTier.values()) {
-            if (rawName.contains(t.name().toLowerCase())) {
-                tier = t;
-                break;
-            }
-        }
-        
+        RuneTier tier = RuneItemData.getTier(previewItem, plugin);
         if (tier == null) return;
         
         // Get level range from config for this tier
@@ -203,7 +261,7 @@ public class RuneItemListener implements Listener {
             player.getWorld().dropItemNaturally(player.getLocation(), it);
         }
         
-        String msg = plugin.getConfig().getString("messages.runeRevealed", "&aYour rune revealed a &f%enchant% &abook!");
+        String msg = plugin.getMessage("messages.runeRevealed", "&aYour rune revealed a &f%enchant% &abook!");
         msg = msg.replace("%enchant%", enchantId);
         player.sendMessage(TextFormatter.format(msg));
         

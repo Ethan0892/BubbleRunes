@@ -12,6 +12,7 @@ public class DatabaseManager {
     private final BubbleRunePlugin plugin;
     private Connection connection;
     private final File databaseFile;
+    private final Object dbLock = new Object();
 
     public DatabaseManager(BubbleRunePlugin plugin) {
         this.plugin = plugin;
@@ -117,8 +118,10 @@ public class DatabaseManager {
      * Execute an SQL statement without returning results
      */
     private void execute(String sql) throws SQLException {
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute(sql);
+        synchronized (dbLock) {
+            try (Statement stmt = connection.createStatement()) {
+                stmt.execute(sql);
+            }
         }
     }
 
@@ -158,75 +161,76 @@ public class DatabaseManager {
             int xpCost,
             int coinCost,
             org.bukkit.Location location) throws SQLException {
-        
-        long timestamp = System.currentTimeMillis();
-        String today = java.time.LocalDate.now().toString();
+        synchronized (dbLock) {
+            long timestamp = System.currentTimeMillis();
+            String today = java.time.LocalDate.now().toString();
 
-        // Insert into roll history
-        String insertRoll = 
-            "INSERT INTO roll_history (uuid, player_name, tier, enchant_id, enchant_name, enchant_level, " +
-            "xp_cost, coin_cost, location_world, location_x, location_y, location_z, timestamp) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        try (PreparedStatement stmt = connection.prepareStatement(insertRoll)) {
-            stmt.setString(1, playerId.toString());
-            stmt.setString(2, playerName);
-            stmt.setString(3, tier.name());
-            stmt.setString(4, enchantId);
-            stmt.setString(5, enchantName);
-            stmt.setInt(6, enchantLevel);
-            stmt.setInt(7, xpCost);
-            stmt.setInt(8, coinCost);
-            stmt.setString(9, location != null ? location.getWorld().getName() : null);
-            stmt.setDouble(10, location != null ? location.getX() : 0);
-            stmt.setDouble(11, location != null ? location.getY() : 0);
-            stmt.setDouble(12, location != null ? location.getZ() : 0);
-            stmt.setLong(13, timestamp);
-            stmt.executeUpdate();
-        }
+            // Insert into roll history
+            String insertRoll =
+                "INSERT INTO roll_history (uuid, player_name, tier, enchant_id, enchant_name, enchant_level, " +
+                "xp_cost, coin_cost, location_world, location_x, location_y, location_z, timestamp) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-        // Update player stats
-        String tierColumn = tier.name().toLowerCase() + "_rolls";
-        String updatePlayer = 
-            "INSERT INTO player_stats (uuid, player_name, total_rolls, total_xp_spent, total_coins_spent, " +
-            tierColumn + ", first_roll_date, last_roll_date, updated_at) " +
-            "VALUES (?, ?, 1, ?, ?, 1, ?, ?, ?) " +
-            "ON CONFLICT(uuid) DO UPDATE SET " +
-            "player_name = excluded.player_name, " +
-            "total_rolls = total_rolls + 1, " +
-            "total_xp_spent = total_xp_spent + excluded.total_xp_spent, " +
-            "total_coins_spent = total_coins_spent + excluded.total_coins_spent, " +
-            tierColumn + " = " + tierColumn + " + 1, " +
-            "last_roll_date = excluded.last_roll_date, " +
-            "updated_at = excluded.updated_at";
-        
-        try (PreparedStatement stmt = connection.prepareStatement(updatePlayer)) {
-            stmt.setString(1, playerId.toString());
-            stmt.setString(2, playerName);
-            stmt.setInt(3, xpCost);
-            stmt.setInt(4, coinCost);
-            stmt.setLong(5, timestamp);
-            stmt.setLong(6, timestamp);
-            stmt.setLong(7, timestamp);
-            stmt.executeUpdate();
-        }
+            try (PreparedStatement stmt = connection.prepareStatement(insertRoll)) {
+                stmt.setString(1, playerId.toString());
+                stmt.setString(2, playerName);
+                stmt.setString(3, tier.name());
+                stmt.setString(4, enchantId);
+                stmt.setString(5, enchantName);
+                stmt.setInt(6, enchantLevel);
+                stmt.setInt(7, xpCost);
+                stmt.setInt(8, coinCost);
+                stmt.setString(9, location != null ? location.getWorld().getName() : null);
+                stmt.setDouble(10, location != null ? location.getX() : 0);
+                stmt.setDouble(11, location != null ? location.getY() : 0);
+                stmt.setDouble(12, location != null ? location.getZ() : 0);
+                stmt.setLong(13, timestamp);
+                stmt.executeUpdate();
+            }
 
-        // Update daily stats
-        String updateDaily = 
-            "INSERT INTO daily_stats (date, total_rolls, total_xp_spent, total_coins_spent, unique_players, " +
-            tierColumn + ") " +
-            "VALUES (?, 1, ?, ?, 1, 1) " +
-            "ON CONFLICT(date) DO UPDATE SET " +
-            "total_rolls = total_rolls + 1, " +
-            "total_xp_spent = total_xp_spent + excluded.total_xp_spent, " +
-            "total_coins_spent = total_coins_spent + excluded.total_coins_spent, " +
-            tierColumn + " = " + tierColumn + " + 1";
-        
-        try (PreparedStatement stmt = connection.prepareStatement(updateDaily)) {
-            stmt.setString(1, today);
-            stmt.setInt(2, xpCost);
-            stmt.setInt(3, coinCost);
-            stmt.executeUpdate();
+            // Update player stats
+            String tierColumn = tier.name().toLowerCase() + "_rolls";
+            String updatePlayer =
+                "INSERT INTO player_stats (uuid, player_name, total_rolls, total_xp_spent, total_coins_spent, " +
+                tierColumn + ", first_roll_date, last_roll_date, updated_at) " +
+                "VALUES (?, ?, 1, ?, ?, 1, ?, ?, ?) " +
+                "ON CONFLICT(uuid) DO UPDATE SET " +
+                "player_name = excluded.player_name, " +
+                "total_rolls = total_rolls + 1, " +
+                "total_xp_spent = total_xp_spent + excluded.total_xp_spent, " +
+                "total_coins_spent = total_coins_spent + excluded.total_coins_spent, " +
+                tierColumn + " = " + tierColumn + " + 1, " +
+                "last_roll_date = excluded.last_roll_date, " +
+                "updated_at = excluded.updated_at";
+
+            try (PreparedStatement stmt = connection.prepareStatement(updatePlayer)) {
+                stmt.setString(1, playerId.toString());
+                stmt.setString(2, playerName);
+                stmt.setInt(3, xpCost);
+                stmt.setInt(4, coinCost);
+                stmt.setLong(5, timestamp);
+                stmt.setLong(6, timestamp);
+                stmt.setLong(7, timestamp);
+                stmt.executeUpdate();
+            }
+
+            // Update daily stats
+            String updateDaily =
+                "INSERT INTO daily_stats (date, total_rolls, total_xp_spent, total_coins_spent, unique_players, " +
+                tierColumn + ") " +
+                "VALUES (?, 1, ?, ?, 1, 1) " +
+                "ON CONFLICT(date) DO UPDATE SET " +
+                "total_rolls = total_rolls + 1, " +
+                "total_xp_spent = total_xp_spent + excluded.total_xp_spent, " +
+                "total_coins_spent = total_coins_spent + excluded.total_coins_spent, " +
+                tierColumn + " = " + tierColumn + " + 1";
+
+            try (PreparedStatement stmt = connection.prepareStatement(updateDaily)) {
+                stmt.setString(1, today);
+                stmt.setInt(2, xpCost);
+                stmt.setInt(3, coinCost);
+                stmt.executeUpdate();
+            }
         }
     }
 
@@ -235,28 +239,30 @@ public class DatabaseManager {
      */
     public PlayerStats getPlayerStats(UUID playerId) throws SQLException {
         String query = "SELECT * FROM player_stats WHERE uuid = ?";
-        
-        try (PreparedStatement stmt = connection.prepareStatement(query)) {
-            stmt.setString(1, playerId.toString());
-            ResultSet rs = stmt.executeQuery();
-            
-            if (rs.next()) {
-                return new PlayerStats(
-                    UUID.fromString(rs.getString("uuid")),
-                    rs.getString("player_name"),
-                    rs.getInt("total_rolls"),
-                    rs.getInt("total_xp_spent"),
-                    rs.getInt("total_coins_spent"),
-                    rs.getInt("common_rolls"),
-                    rs.getInt("uncommon_rolls"),
-                    rs.getInt("rare_rolls"),
-                    rs.getInt("epic_rolls"),
-                    rs.getInt("legendary_rolls"),
-                    rs.getInt("special_rolls"),
-                    rs.getInt("veryspecial_rolls"),
-                    rs.getLong("first_roll_date"),
-                    rs.getLong("last_roll_date")
-                );
+
+        synchronized (dbLock) {
+            try (PreparedStatement stmt = connection.prepareStatement(query)) {
+                stmt.setString(1, playerId.toString());
+                ResultSet rs = stmt.executeQuery();
+
+                if (rs.next()) {
+                    return new PlayerStats(
+                        UUID.fromString(rs.getString("uuid")),
+                        rs.getString("player_name"),
+                        rs.getInt("total_rolls"),
+                        rs.getInt("total_xp_spent"),
+                        rs.getInt("total_coins_spent"),
+                        rs.getInt("common_rolls"),
+                        rs.getInt("uncommon_rolls"),
+                        rs.getInt("rare_rolls"),
+                        rs.getInt("epic_rolls"),
+                        rs.getInt("legendary_rolls"),
+                        rs.getInt("special_rolls"),
+                        rs.getInt("veryspecial_rolls"),
+                        rs.getLong("first_roll_date"),
+                        rs.getLong("last_roll_date")
+                    );
+                }
             }
         }
         
@@ -269,28 +275,30 @@ public class DatabaseManager {
     public List<PlayerStats> getTopPlayers(int limit) throws SQLException {
         List<PlayerStats> topPlayers = new ArrayList<>();
         String query = "SELECT * FROM player_stats ORDER BY total_rolls DESC LIMIT ?";
-        
-        try (PreparedStatement stmt = connection.prepareStatement(query)) {
-            stmt.setInt(1, limit);
-            ResultSet rs = stmt.executeQuery();
-            
-            while (rs.next()) {
-                topPlayers.add(new PlayerStats(
-                    UUID.fromString(rs.getString("uuid")),
-                    rs.getString("player_name"),
-                    rs.getInt("total_rolls"),
-                    rs.getInt("total_xp_spent"),
-                    rs.getInt("total_coins_spent"),
-                    rs.getInt("common_rolls"),
-                    rs.getInt("uncommon_rolls"),
-                    rs.getInt("rare_rolls"),
-                    rs.getInt("epic_rolls"),
-                    rs.getInt("legendary_rolls"),
-                    rs.getInt("special_rolls"),
-                    rs.getInt("veryspecial_rolls"),
-                    rs.getLong("first_roll_date"),
-                    rs.getLong("last_roll_date")
-                ));
+
+        synchronized (dbLock) {
+            try (PreparedStatement stmt = connection.prepareStatement(query)) {
+                stmt.setInt(1, limit);
+                ResultSet rs = stmt.executeQuery();
+
+                while (rs.next()) {
+                    topPlayers.add(new PlayerStats(
+                        UUID.fromString(rs.getString("uuid")),
+                        rs.getString("player_name"),
+                        rs.getInt("total_rolls"),
+                        rs.getInt("total_xp_spent"),
+                        rs.getInt("total_coins_spent"),
+                        rs.getInt("common_rolls"),
+                        rs.getInt("uncommon_rolls"),
+                        rs.getInt("rare_rolls"),
+                        rs.getInt("epic_rolls"),
+                        rs.getInt("legendary_rolls"),
+                        rs.getInt("special_rolls"),
+                        rs.getInt("veryspecial_rolls"),
+                        rs.getLong("first_roll_date"),
+                        rs.getLong("last_roll_date")
+                    ));
+                }
             }
         }
         
@@ -303,25 +311,27 @@ public class DatabaseManager {
     public List<RollRecord> getRecentRolls(UUID playerId, int limit) throws SQLException {
         List<RollRecord> rolls = new ArrayList<>();
         String query = "SELECT * FROM roll_history WHERE uuid = ? ORDER BY timestamp DESC LIMIT ?";
-        
-        try (PreparedStatement stmt = connection.prepareStatement(query)) {
-            stmt.setString(1, playerId.toString());
-            stmt.setInt(2, limit);
-            ResultSet rs = stmt.executeQuery();
-            
-            while (rs.next()) {
-                rolls.add(new RollRecord(
-                    rs.getInt("id"),
-                    UUID.fromString(rs.getString("uuid")),
-                    rs.getString("player_name"),
-                    RuneTier.valueOf(rs.getString("tier")),
-                    rs.getString("enchant_id"),
-                    rs.getString("enchant_name"),
-                    rs.getInt("enchant_level"),
-                    rs.getInt("xp_cost"),
-                    rs.getInt("coin_cost"),
-                    rs.getLong("timestamp")
-                ));
+
+        synchronized (dbLock) {
+            try (PreparedStatement stmt = connection.prepareStatement(query)) {
+                stmt.setString(1, playerId.toString());
+                stmt.setInt(2, limit);
+                ResultSet rs = stmt.executeQuery();
+
+                while (rs.next()) {
+                    rolls.add(new RollRecord(
+                        rs.getInt("id"),
+                        UUID.fromString(rs.getString("uuid")),
+                        rs.getString("player_name"),
+                        RuneTier.valueOf(rs.getString("tier")),
+                        rs.getString("enchant_id"),
+                        rs.getString("enchant_name"),
+                        rs.getInt("enchant_level"),
+                        rs.getInt("xp_cost"),
+                        rs.getInt("coin_cost"),
+                        rs.getLong("timestamp")
+                    ));
+                }
             }
         }
         
@@ -334,17 +344,19 @@ public class DatabaseManager {
     public GlobalStats getGlobalStats() throws SQLException {
         String query = "SELECT SUM(total_rolls) as total, SUM(total_xp_spent) as xp, " +
                       "SUM(total_coins_spent) as coins, COUNT(*) as players FROM player_stats";
-        
-        try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
-            
-            if (rs.next()) {
-                return new GlobalStats(
-                    rs.getInt("total"),
-                    rs.getInt("xp"),
-                    rs.getInt("coins"),
-                    rs.getInt("players")
-                );
+
+        synchronized (dbLock) {
+            try (Statement stmt = connection.createStatement();
+                 ResultSet rs = stmt.executeQuery(query)) {
+
+                if (rs.next()) {
+                    return new GlobalStats(
+                        rs.getInt("total"),
+                        rs.getInt("xp"),
+                        rs.getInt("coins"),
+                        rs.getInt("players")
+                    );
+                }
             }
         }
         
@@ -358,17 +370,41 @@ public class DatabaseManager {
         Map<RuneTier, Integer> distribution = new EnumMap<>(RuneTier.class);
         
         String query = "SELECT tier, COUNT(*) as count FROM roll_history GROUP BY tier";
-        
-        try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
-            
-            while (rs.next()) {
-                RuneTier tier = RuneTier.valueOf(rs.getString("tier"));
-                distribution.put(tier, rs.getInt("count"));
+
+        synchronized (dbLock) {
+            try (Statement stmt = connection.createStatement();
+                 ResultSet rs = stmt.executeQuery(query)) {
+
+                while (rs.next()) {
+                    RuneTier tier = RuneTier.valueOf(rs.getString("tier"));
+                    distribution.put(tier, rs.getInt("count"));
+                }
             }
         }
         
         return distribution;
+    }
+
+    /**
+     * Get a player's rank based on total rolls.
+     * Returns null if the player has no stats.
+     */
+    public Integer getPlayerRank(UUID playerId) throws SQLException {
+        String query =
+            "SELECT (SELECT COUNT(*) FROM player_stats ps2 WHERE ps2.total_rolls > ps.total_rolls) + 1 AS rank " +
+            "FROM player_stats ps WHERE ps.uuid = ?";
+
+        synchronized (dbLock) {
+            try (PreparedStatement stmt = connection.prepareStatement(query)) {
+                stmt.setString(1, playerId.toString());
+                ResultSet rs = stmt.executeQuery();
+                if (rs.next()) {
+                    return rs.getInt("rank");
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -377,7 +413,9 @@ public class DatabaseManager {
     public void close() {
         try {
             if (connection != null && !connection.isClosed()) {
-                connection.close();
+                synchronized (dbLock) {
+                    connection.close();
+                }
                 plugin.getLogger().info("Database connection closed.");
             }
         } catch (SQLException e) {

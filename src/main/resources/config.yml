@@ -22,6 +22,9 @@
 
 enabled: true
 
+# When enabled, BubbleRune logs extra details (useful for diagnosing EcoEnchants/book issues).
+debug: false
+
 # Performance & Safety Settings
 performance:
   # Prevent players from spamming rune tables (milliseconds)
@@ -32,6 +35,13 @@ performance:
   maxParticles: 100
   # Async particle spawning (reduces main thread load)
   asyncParticles: true
+
+# PlaceholderAPI refresh behavior.
+# Placeholders are evaluated by PlaceholderAPI whenever another plugin requests them;
+# BubbleRune keeps a cached snapshot that refreshes on this interval.
+placeholders:
+  # 300 seconds = 5 minutes
+  refreshSeconds: 300
 
 # Multiple rune enchantment table locations
 # Add more tables by creating new entries under runeTables
@@ -75,7 +85,12 @@ particles:
 # Rune combining in anvil
 runeCombining:
   enabled: true
-  requiredRunes: 3  # Number of same-tier runes needed to upgrade to next tier
+  requiredRunes: 2  # Number of same-tier runes needed to upgrade to next tier
+
+# Rune combining via crafting grid (player 2x2 crafting and crafting table)
+runeCraftingCombining:
+  enabled: true
+  requiredRunes: 3  # Number of same-tier runes needed to craft the next tier
 
 # Legacy XP cost setting - DEPRECATED
 # XP costs are now configured per tier in the tiers section below
@@ -83,6 +98,15 @@ runeCombining:
 xpCost:
   min: 1000
   max: 10000
+  # Global multiplier applied to ALL tier XP costs.
+  # Increase this to make runes take longer to grind (more playtime).
+  # Example: 2.0 = double the XP costs shown/consumed.
+  multiplier: 1.0
+
+# Crate-like roll UX for the rune table GUI.
+gambleRoll:
+  enabled: true
+  delayTicks: 40  # 20 ticks = 1 second
 
 # Rune tiers and their XP thresholds for GUARANTEED tier rewards.
 # Players get the HIGHEST tier they can afford based on their current XP.
@@ -278,8 +302,16 @@ gui:
 # Economy Settings
 economy:
   # Require BubbleCoin from CoinsEngine plugin
+  # Provider options:
+  # - coinsengine (default)
+  # - disabled
+  provider: "coinsengine"
   bubbleCoinEnabled: true
-  bubbleCoinCurrency: "bubblecoin"  # Currency ID in CoinsEngine
+  # Currency ID in your economy provider (CoinsEngine currency id)
+  currencyId: "bubblecoin"
+
+  # Backwards compatible key (deprecated):
+  # bubbleCoinCurrency: "bubblecoin"
   
   # If CoinsEngine is not found, disable coin requirement automatically
   requireCoinsEnginePlugin: true
@@ -303,19 +335,9 @@ fireworks:
 broadcasts:
   enabled: true
 
-messages:
-  # You can use MiniMessage here! Examples:
-  # runeReceived: "<green>You received a <white>%tier%</white> rune!</green>"
-  # broadcast: "<gradient:gold:yellow><bold>✦</bold></gradient> <yellow>%player%</yellow> rolled a <rainbow>%tier%</rainbow> rune!"
-  runeReceived: "&aYou received a &f%tier% &arune! (-%cost_xp% XP, -%cost_coins% BubbleCoins)"
-  notEnoughXp: "&cYou need at least %cost_xp% XP and %cost_coins% BubbleCoins to roll a %tier% rune!"
-  notEnoughCoins: "&cYou need %cost_coins% BubbleCoins to roll a rune!"
-  inventoryFull: "&cYour inventory is full! Clear a slot first."
-  runeRevealed: "&aYour rune revealed a &f%enchant% &abook!"
-  cooldown: "&cYou must wait %seconds% seconds before using the rune table again!"
-  runeCombined: "&aYou combined %count% &f%tier% &arunes into a &f%newtier% &arune!"
-  broadcast: "&6&l✦ &e%player% &6rolled a &f%tier% &6rune! &6&l✦"
-  coinsEngineNotFound: "&cCoinsEngine plugin not found! BubbleCoin costs disabled."
+# Messages were moved to messages.yml
+# (config.yml messages section is no longer used, but message lookups still fall back
+# to config.yml keys for backwards compatibility if messages.yml is missing.)
 
 runeItem:
   material: "PAPER"
@@ -325,7 +347,7 @@ runeItem:
     - "&7Right-click to reveal a"
     - "&7random &f%tier% &7EcoEnchant book."
     - ""
-    - "&7Combine 3 in an anvil to upgrade!"
+    - "&7Combine 2 in an anvil to upgrade!"
 
 bookItem:
   name: "&d%enchant% Book"

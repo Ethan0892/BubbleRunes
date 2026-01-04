@@ -73,7 +73,9 @@ public class RuneTableListener implements Listener {
         event.setCancelled(true);
         
         if (!plugin.getConfig().getBoolean("enabled", true)) {
-            player.sendMessage(ChatColor.RED + "BubbleRune is currently disabled.");
+            player.sendMessage(TextFormatter.format(plugin.getMessage(
+                "messages.pluginDisabled",
+                "&cBubbleRune is currently disabled.")));
             return;
         }
         
@@ -82,7 +84,7 @@ public class RuneTableListener implements Listener {
         if (plugin.getConfig().getBoolean("cooldown.enabled", true)) {
             if (cooldown.isOnCooldown(player.getUniqueId())) {
                 long remaining = cooldown.getRemainingCooldown(player.getUniqueId());
-                String msg = plugin.getConfig().getString("messages.cooldown", 
+                String msg = plugin.getMessage("messages.cooldown", 
                     "&cYou must wait %seconds% seconds before using the rune table again!");
                 msg = msg.replace("%seconds%", String.valueOf(remaining));
                 player.sendMessage(TextFormatter.format(msg));
