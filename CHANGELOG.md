@@ -3,7 +3,16 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-## [1.0.3] - Finish date Unknown
+
+## [1.0.4] - 2026-01-04
+
+### Added
+- Added `/bubblerune debug [on|off|toggle]` to enable extra diagnostics.
+
+### Fixed
+- Improved EcoEnchants enchanted-book generation by using more forgiving enchant ID lookup (namespaced keys + separator/case normalization) and better debug logging when an enchant cannot be resolved.
+
+## [1.0.3] - 2026-01-04
 
 ### Added
 - The tier items are now informational only (they still list the potential runes), and do nothing when clicked.

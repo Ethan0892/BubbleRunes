@@ -1,6 +1,6 @@
 name: BubbleRune
 main: com.bubblecraft.bubblerune.BubbleRunePlugin
-version: 1.0.3
+version: 1.0.4
 api-version: "1.21"
 author: BubbleCraft
 website: ""
